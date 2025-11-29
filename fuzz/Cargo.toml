@@ -1,0 +1,42 @@
+[package]
+name = "affs-read-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.affs-read]
+path = ".."
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_blocks"
+path = "fuzz_targets/fuzz_blocks.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_names"
+path = "fuzz_targets/fuzz_names.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_checksum"
+path = "fuzz_targets/fuzz_checksum.rs"
+test = false
+doc = false
+bench = false

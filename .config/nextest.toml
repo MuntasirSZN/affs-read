@@ -1,0 +1,6 @@
+[profile.default]
+fail-fast = false
+retries = 1
+
+[profile.default.junit]
+path = "junit.xml"

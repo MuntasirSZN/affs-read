@@ -1,0 +1,17 @@
+[package]
+name = "affs-read"
+version = "0.1.0"
+edition = "2024"
+description = "A no_std compatible crate for reading Amiga Fast File System (AFFS) disk images"
+license = "MIT OR Apache-2.0"
+keywords = ["amiga", "filesystem", "adf", "affs", "no_std"]
+categories = ["no-std", "filesystem", "embedded", "parser-implementations"]
+
+[features]
+default = ["std"]
+std = []
+alloc = []
+
+[dependencies]
+
+[dev-dependencies]

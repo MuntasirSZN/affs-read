@@ -1,0 +1,132 @@
+name: CI
+permissions:
+  contents: read
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Setup rust toolchain
+        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        with:
+          channel: stable
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Setup rust toolchain
+        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        with:
+          channel: stable
+          components: clippy
+      - name: Run clippy
+        run: cargo clippy --all-features --all-targets --locked -- -D warnings
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Setup rust toolchain
+        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        with:
+          channel: stable
+          cache-target: test
+          bins: cargo-nextest
+      - name: Run tests
+        run: cargo nextest run --all-features
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@76cd80eb775d7bbbd2d80292136d74d39e1b4918 # v2.0.14
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@71cf2267d89c5cb81562390fa70a37fa40b1305e # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Setup rust toolchain, cache, install nextest and cargo-llvm-cov
+        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        with:
+          channel: nightly
+          components: llvm-tools
+          cache-target: test
+          bins: cargo-nextest,cargo-llvm-cov
+      - name: Generate coverage
+        run: |
+          cargo +nightly llvm-cov --all-features --no-report nextest
+          cargo +nightly llvm-cov --all-features --no-report --doc
+          cargo +nightly llvm-cov report --doctests --lcov --output-path lcov.info
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@47f89e9acb64b76debcd5ea40642d25a4adced9f # v1.1.1
+        with:
+          file: target/nextest/default/junit.xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.5.1
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+  fuzz:
+    name: Fuzz Target ${{ matrix.fuzz_target }}
+    runs-on: ubuntu-latest
+    env:
+      FUZZ_TIME: 600
+    strategy:
+      matrix:
+        include:
+          - fuzz_target: fuzz_read
+          - fuzz_target: fuzz_checksum
+          - fuzz_target: fuzz_blocks
+          - fuzz_target: fuzz_names
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Setup rust toolchain
+        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        with:
+          channel: nightly
+          components: cargo-fuzz
+      - run: cargo fuzz build ${{ matrix.fuzz_target }}
+      - run: cargo fuzz run ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: failure()
+        with:
+          name: fuzzing-artifacts-${{ matrix.fuzz_target }}-${{ github.sha }}
+          path: fuzz/artifacts
