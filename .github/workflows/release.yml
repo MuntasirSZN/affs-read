@@ -6,7 +6,6 @@ on:
 jobs:
   publish-crates-io:
     name: Publish to crates.io
-    needs: create-release
     runs-on: ubuntu-latest
     permissions:
       contents: read
