@@ -122,7 +122,7 @@ jobs:
         uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
         with:
           channel: nightly
-          components: cargo-fuzz
+          bins: cargo-fuzz
       - run: cargo fuzz build ${{ matrix.fuzz_target }}
       - run: cargo fuzz run ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
