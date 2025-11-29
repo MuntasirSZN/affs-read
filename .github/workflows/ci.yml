@@ -123,8 +123,8 @@ jobs:
         with:
           channel: nightly
           bins: cargo-fuzz
-      - run: cargo fuzz build ${{ matrix.fuzz_target }}
-      - run: cargo fuzz run ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }}
+      - run: cargo fuzz build ${{ matrix.fuzz_target }} --target x86_64-unknown-linux-gnu
+      - run: cargo fuzz run ${{ matrix.fuzz_target }} -- -max_total_time=${{ env.FUZZ_TIME }} --target x86_64-unknown-linux-gnu
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
