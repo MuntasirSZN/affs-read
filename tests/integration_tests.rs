@@ -924,7 +924,7 @@ fn test_file_reader_from_entry() {
 
     let entry_block = reader.read_entry(882).unwrap();
     let mut file_reader =
-        FileReader::from_entry(reader.device(), reader.fs_type(), &entry_block).unwrap();
+        FileReader::from_entry(reader.device(), reader.fs_type(), 882, &entry_block).unwrap();
 
     assert_eq!(file_reader.size(), 100);
 
@@ -1563,7 +1563,7 @@ fn test_file_reader_seek_past_eof() {
 }
 
 #[test]
-fn test_file_reader_seek_backward_error() {
+fn test_file_reader_seek_backward() {
     let device = create_test_disk();
     let reader = AffsReader::new(&device).unwrap();
 
@@ -1574,9 +1574,44 @@ fn test_file_reader_seek_backward_error() {
     file_reader.read(&mut buf).unwrap();
     assert_eq!(file_reader.position(), 50);
 
-    // Try to seek backward - should fail
-    let result = file_reader.seek(20);
-    assert!(matches!(result, Err(AffsError::InvalidState)));
+    // Seek backward should now work
+    file_reader.seek(20).unwrap();
+    assert_eq!(file_reader.position(), 20);
+    assert_eq!(file_reader.remaining(), file_reader.size() - 20);
+
+    // Read from the new position
+    let mut buf2 = [0u8; 10];
+    file_reader.read(&mut buf2).unwrap();
+    assert_eq!(file_reader.position(), 30);
+
+    // Verify data matches what we read before at the same offset
+    assert_eq!(&buf2[..], &buf[20..30]);
+}
+
+#[test]
+fn test_file_reader_reset() {
+    let device = create_test_disk();
+    let reader = AffsReader::new(&device).unwrap();
+
+    let mut file_reader = reader.read_file(882).unwrap();
+
+    // Read entire file
+    let mut buf1 = [0u8; 100];
+    let n = file_reader.read_all(&mut buf1).unwrap();
+    assert_eq!(n, 100);
+    assert!(file_reader.is_eof());
+
+    // Reset and read again
+    file_reader.reset();
+    assert_eq!(file_reader.position(), 0);
+    assert_eq!(file_reader.remaining(), file_reader.size());
+    assert!(!file_reader.is_eof());
+
+    // Read again and verify same content
+    let mut buf2 = [0u8; 100];
+    let n = file_reader.read_all(&mut buf2).unwrap();
+    assert_eq!(n, 100);
+    assert_eq!(buf1, buf2);
 }
 
 #[test]

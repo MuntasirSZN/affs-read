@@ -26,20 +26,30 @@ use crate::types::{BlockDevice, FsType};
 pub struct FileReader<'a, D: BlockDevice> {
     device: &'a D,
     fs_type: FsType,
+    /// Block number of file header (for reset/seek).
+    header_block: u32,
     /// Total file size in bytes.
     file_size: u32,
     /// Bytes remaining to read.
     remaining: u32,
     /// Current block index within the file (0-based).
     block_index: u32,
+    /// Initial number of data blocks in header (for reset).
+    initial_blocks_in_header: u32,
     /// Total number of data blocks in header/ext block.
     blocks_in_current: u32,
     /// Index within current header/extension block.
     index_in_current: u32,
+    /// Initial data block pointers from header (for reset).
+    initial_data_blocks: [u32; MAX_DATABLK],
     /// Current data block pointers (from header or extension).
     data_blocks: [u32; MAX_DATABLK],
+    /// Initial extension block (for reset).
+    initial_extension: u32,
     /// Next extension block.
     next_extension: u32,
+    /// Initial first data block for OFS (for reset).
+    initial_first_data: u32,
     /// Current data block (for OFS linked list).
     current_data_block: u32,
     /// Offset within current data block.
@@ -77,13 +87,18 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
         Ok(Self {
             device,
             fs_type,
+            header_block,
             file_size,
             remaining: file_size,
             block_index: 0,
+            initial_blocks_in_header: blocks_in_current,
             blocks_in_current,
             index_in_current: 0,
+            initial_data_blocks: data_blocks,
             data_blocks,
+            initial_extension: entry.extension,
             next_extension: entry.extension,
+            initial_first_data: entry.first_data,
             current_data_block: entry.first_data,
             offset_in_block: 0,
             buf,
@@ -93,7 +108,18 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
     /// Create a file reader from an already-parsed entry block.
     ///
     /// This avoids re-reading the header block if you already have it.
-    pub fn from_entry(device: &'a D, fs_type: FsType, entry: &EntryBlock) -> Result<Self> {
+    ///
+    /// # Arguments
+    /// * `device` - Block device to read from
+    /// * `fs_type` - Filesystem type (OFS or FFS)
+    /// * `header_block` - Block number of the file header
+    /// * `entry` - Already-parsed entry block
+    pub fn from_entry(
+        device: &'a D,
+        fs_type: FsType,
+        header_block: u32,
+        entry: &EntryBlock,
+    ) -> Result<Self> {
         if !entry.is_file() {
             return Err(AffsError::NotAFile);
         }
@@ -107,13 +133,18 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
         Ok(Self {
             device,
             fs_type,
+            header_block,
             file_size,
             remaining: file_size,
             block_index: 0,
+            initial_blocks_in_header: blocks_in_current,
             blocks_in_current,
             index_in_current: 0,
+            initial_data_blocks: data_blocks,
             data_blocks,
+            initial_extension: entry.extension,
             next_extension: entry.extension,
+            initial_first_data: entry.first_data,
             current_data_block: entry.first_data,
             offset_in_block: 0,
             buf: [0u8; BLOCK_SIZE],
@@ -124,6 +155,12 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
     #[inline]
     pub const fn size(&self) -> u32 {
         self.file_size
+    }
+
+    /// Get the block number of the file header.
+    #[inline]
+    pub const fn header_block(&self) -> u32 {
+        self.header_block
     }
 
     /// Get the number of bytes remaining to read.
@@ -142,6 +179,20 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
     #[inline]
     pub const fn position(&self) -> u32 {
         self.file_size - self.remaining
+    }
+
+    /// Reset the reader to the beginning of the file.
+    ///
+    /// This restores all internal state to allow reading from the start.
+    pub fn reset(&mut self) {
+        self.remaining = self.file_size;
+        self.block_index = 0;
+        self.blocks_in_current = self.initial_blocks_in_header;
+        self.index_in_current = 0;
+        self.data_blocks = self.initial_data_blocks;
+        self.next_extension = self.initial_extension;
+        self.current_data_block = self.initial_first_data;
+        self.offset_in_block = 0;
     }
 
     /// Read data into a buffer.
@@ -325,8 +376,8 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
 
     /// Seek to a specific position in the file.
     ///
-    /// Note: This is relatively expensive as it may need to re-read
-    /// the file header and extension blocks.
+    /// Note: Seeking backwards resets to the beginning and seeks forward,
+    /// which may need to re-read extension blocks for large files.
     pub fn seek(&mut self, position: u32) -> Result<()> {
         if position > self.file_size {
             return Err(AffsError::EndOfFile);
@@ -336,12 +387,9 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
             return Ok(());
         }
 
-        // For now, restart from beginning if seeking backwards
-        // A more optimized version could cache extension blocks
+        // For backward seeks, reset to beginning first
         if position < self.position() {
-            // Would need to re-read header, which we don't have stored
-            // This is a limitation - for now return error for backward seek
-            return Err(AffsError::InvalidState);
+            self.reset();
         }
 
         // Seek forward by reading and discarding

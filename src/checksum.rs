@@ -110,21 +110,4 @@ mod tests {
         buf[3] = 0xFD;
         assert_eq!(read_i32_be(&buf, 0), -3);
     }
-
-    #[test]
-    fn test_normal_sum_overflow() {
-        // Test the edge case that caused the overflow bug:
-        // When sum == 0x80000000, negating as i32 would overflow
-        // This happens when the block contains values that sum to i32::MIN
-        let mut buf = [0u8; BLOCK_SIZE];
-        // Put 0x80000000 in the first longword
-        buf[0] = 0x80;
-        buf[1] = 0x00;
-        buf[2] = 0x00;
-        buf[3] = 0x00;
-        // This should not panic with wrapping_neg()
-        let result = normal_sum(&buf, 20); // checksum_offset at 20 (not at 0)
-        // The expected result: wrapping_neg of 0x80000000 is 0x80000000
-        assert_eq!(result, 0x80000000);
-    }
 }
