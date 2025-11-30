@@ -48,31 +48,29 @@ fuzz_target!(|data: &[u8]| {
     };
 
     // Try to read root directory
-    for entry in reader.read_root_dir() {
-        if let Ok(entry) = entry {
-            // Try to read the entry name
-            let _ = entry.name();
-            let _ = entry.name_str();
-            let _ = entry.comment();
-            let _ = entry.comment_str();
-            let _ = entry.is_dir();
-            let _ = entry.is_file();
+    for entry in reader.read_root_dir().flatten() {
+        // Try to read the entry name
+        let _ = entry.name();
+        let _ = entry.name_str();
+        let _ = entry.comment();
+        let _ = entry.comment_str();
+        let _ = entry.is_dir();
+        let _ = entry.is_file();
 
-            // If it's a file, try to read it
-            if entry.is_file() {
-                if let Ok(mut file_reader) = reader.read_file(entry.block) {
-                    let mut buf = [0u8; 1024];
-                    // Try to read some data
-                    let _ = file_reader.read(&mut buf);
-                }
+        // If it's a file, try to read it
+        if entry.is_file() {
+            if let Ok(mut file_reader) = reader.read_file(entry.block) {
+                let mut buf = [0u8; 1024];
+                // Try to read some data
+                let _ = file_reader.read(&mut buf);
             }
+        }
 
-            // If it's a directory, try to read it
-            if entry.is_dir() {
-                if let Ok(subdir) = reader.read_dir(entry.block) {
-                    for subentry in subdir {
-                        let _ = subentry;
-                    }
+        // If it's a directory, try to read it
+        if entry.is_dir() {
+            if let Ok(subdir) = reader.read_dir(entry.block) {
+                for subentry in subdir {
+                    let _ = subentry;
                 }
             }
         }
