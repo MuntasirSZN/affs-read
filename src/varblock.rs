@@ -643,9 +643,7 @@ mod tests {
                 0 => {
                     // First half of boot block
                     let mut boot = [0u8; 1024];
-                    for i in 0..1024 {
-                        boot[i] = 0;
-                    }
+                    boot.fill(0);
                     boot[0..3].copy_from_slice(b"DOS");
                     boot[3] = DOSFS_FFS; // FFS flag
                     // buf[12] = 0 => skip boot checksum validation
@@ -656,9 +654,7 @@ mod tests {
                 1 => {
                     // Second half of boot block
                     let mut boot = [0u8; 1024];
-                    for i in 0..1024 {
-                        boot[i] = 0;
-                    }
+                    boot.fill(0);
                     boot[0..3].copy_from_slice(b"DOS");
                     boot[3] = DOSFS_FFS;
                     DummyGoodDevice::write_u32_be(&mut boot, 8, 2);
@@ -668,9 +664,7 @@ mod tests {
                 2 => {
                     // Root block (512 bytes)
                     let mut rb = [0u8; 512];
-                    for i in 0..512 {
-                        rb[i] = 0;
-                    }
+                    rb.fill(0);
                     // Block type header
                     DummyGoodDevice::write_i32_be(&mut rb, 0, T_HEADER);
                     // hash table size at offset 12
@@ -679,7 +673,7 @@ mod tests {
                     // Secondary type at end
                     DummyGoodDevice::write_i32_be(&mut rb, 512 - 4, ST_ROOT);
                     // Set hash table first slot to point to block 5 at SYMLINK_OFFSET
-                    DummyGoodDevice::write_u32_be(&mut rb, SYMLINK_OFFSET + 0 * 4, 5);
+                    DummyGoodDevice::write_u32_be(&mut rb, SYMLINK_OFFSET, 5);
                     // Name offset and name
                     let name_offset = 512 - FILE_LOCATION + 108;
                     rb[name_offset] = 4; // length
@@ -694,9 +688,7 @@ mod tests {
                 5 => {
                     // Directory entry block for block number 5
                     let mut eb = [0u8; 512];
-                    for i in 0..512 {
-                        eb[i] = 0;
-                    }
+                    eb.fill(0);
                     DummyGoodDevice::write_i32_be(&mut eb, 0, T_HEADER);
                     // Secondary type -> file
                     DummyGoodDevice::write_i32_be(&mut eb, 512 - 4, ST_FILE);
