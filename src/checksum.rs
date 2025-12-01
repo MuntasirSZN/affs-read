@@ -8,10 +8,18 @@ use crate::constants::BLOCK_SIZE;
 /// The checksum is calculated such that the sum of all longwords equals 0.
 #[inline]
 pub fn normal_sum(buf: &[u8; BLOCK_SIZE], checksum_offset: usize) -> u32 {
+    normal_sum_slice(buf, checksum_offset)
+}
+
+/// Calculate the normal checksum for a variable-size block.
+///
+/// Used for root blocks, entry blocks, etc. with variable block sizes.
+#[inline]
+pub fn normal_sum_slice(buf: &[u8], checksum_offset: usize) -> u32 {
     let mut sum: u32 = 0;
-    for i in 0..(BLOCK_SIZE / 4) {
+    for i in 0..(buf.len() / 4) {
         if i != checksum_offset / 4 {
-            sum = sum.wrapping_add(read_u32_be(buf, i * 4));
+            sum = sum.wrapping_add(read_u32_be_slice(buf, i * 4));
         }
     }
     (sum as i32).wrapping_neg() as u32
@@ -73,6 +81,12 @@ pub const fn read_u32_be_slice(buf: &[u8], offset: usize) -> u32 {
 /// Read a big-endian i32 from a buffer.
 #[inline]
 pub const fn read_i32_be(buf: &[u8; BLOCK_SIZE], offset: usize) -> i32 {
+    read_i32_be_slice(buf, offset)
+}
+
+/// Read a big-endian i32 from a slice.
+#[inline]
+pub const fn read_i32_be_slice(buf: &[u8], offset: usize) -> i32 {
     i32::from_be_bytes([
         buf[offset],
         buf[offset + 1],

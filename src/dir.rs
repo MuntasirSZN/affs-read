@@ -96,6 +96,12 @@ impl DirEntry {
     pub const fn is_file(&self) -> bool {
         self.entry_type.is_file()
     }
+
+    /// Check if this is a symlink.
+    #[inline]
+    pub const fn is_symlink(&self) -> bool {
+        matches!(self.entry_type, EntryType::SoftLink)
+    }
 }
 
 /// Iterator over directory entries.

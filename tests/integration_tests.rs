@@ -1626,3 +1626,296 @@ fn test_entry_block_comment_method() {
     let entry = EntryBlock::parse(&file).unwrap();
     assert_eq!(entry.comment(), b"Test comment here");
 }
+
+// ============================================================================
+// New Feature Tests: Symlink reading, Volume label, Modification time
+// ============================================================================
+
+/// Create a soft link block.
+fn create_softlink(name: &[u8], target: &[u8], parent: u32) -> [u8; 512] {
+    let mut buf = [0u8; 512];
+
+    // Block type = T_HEADER (2)
+    write_i32_be(&mut buf, 0, 2);
+
+    // Symlink target at offset 24 (GRUB_AFFS_SYMLINK_OFFSET)
+    let target_len = target.len().min(288); // Max symlink length for 512 block
+    buf[24..24 + target_len].copy_from_slice(&target[..target_len]);
+
+    // Name
+    let name_len = name.len().min(30);
+    buf[0x1B0] = name_len as u8;
+    buf[0x1B1..0x1B1 + name_len].copy_from_slice(&name[..name_len]);
+
+    // Parent
+    write_u32_be(&mut buf, 0x1F4, parent);
+
+    // Secondary type = ST_LSOFT (3)
+    write_i32_be(&mut buf, 0x1FC, 3);
+
+    // Set checksum
+    set_checksum(&mut buf, 20);
+
+    buf
+}
+
+#[test]
+fn test_symlink_reading() {
+    let mut device = MockDevice::new(1760);
+    let (boot0, boot1) = create_boot_block();
+    device.set_block(0, &boot0);
+    device.set_block(1, &boot1);
+
+    let mut root = create_root_block(b"SymlinkDisk");
+    let hash_idx = hash_name(b"mylink", false);
+    write_u32_be(&mut root, 24 + hash_idx * 4, 882);
+    set_checksum(&mut root, 20);
+    device.set_block(880, &root);
+
+    // Create a symlink pointing to "path/to/target"
+    let symlink = create_softlink(b"mylink", b"path/to/target\0", 880);
+    device.set_block(882, &symlink);
+
+    let reader = AffsReader::new(&device).unwrap();
+
+    // Find the symlink entry
+    let entry = reader.find_entry(880, b"mylink").unwrap();
+    assert!(entry.is_symlink());
+    assert_eq!(entry.entry_type, EntryType::SoftLink);
+
+    // Read the symlink target
+    let mut target_buf = [0u8; 512];
+    let len = reader.read_symlink(entry.block, &mut target_buf).unwrap();
+    assert_eq!(&target_buf[..len], b"path/to/target");
+}
+
+#[test]
+fn test_symlink_colon_replacement() {
+    let mut device = MockDevice::new(1760);
+    let (boot0, boot1) = create_boot_block();
+    device.set_block(0, &boot0);
+    device.set_block(1, &boot1);
+
+    let mut root = create_root_block(b"AmigaLink");
+    let hash_idx = hash_name(b"bootlink", false);
+    write_u32_be(&mut root, 24 + hash_idx * 4, 882);
+    set_checksum(&mut root, 20);
+    device.set_block(880, &root);
+
+    // Create a symlink with Amiga volume reference (colon at start)
+    let symlink = create_softlink(b"bootlink", b":boot/kernel\0", 880);
+    device.set_block(882, &symlink);
+
+    let reader = AffsReader::new(&device).unwrap();
+
+    let mut target_buf = [0u8; 512];
+    let len = reader.read_symlink(882, &mut target_buf).unwrap();
+
+    // The leading : should be replaced with /
+    assert_eq!(&target_buf[..len], b"/boot/kernel");
+}
+
+#[test]
+fn test_symlink_latin1_to_utf8() {
+    let mut device = MockDevice::new(1760);
+    let (boot0, boot1) = create_boot_block();
+    device.set_block(0, &boot0);
+    device.set_block(1, &boot1);
+
+    let mut root = create_root_block(b"Latin1Disk");
+    let hash_idx = hash_name(b"intllink", false);
+    write_u32_be(&mut root, 24 + hash_idx * 4, 882);
+    set_checksum(&mut root, 20);
+    device.set_block(880, &root);
+
+    // Create a symlink with Latin1 characters (e-acute = 0xE9)
+    let target = [b'c', b'a', b'f', 0xE9, 0]; // "cafe" with accent
+    let symlink = create_softlink(b"intllink", &target, 880);
+    device.set_block(882, &symlink);
+
+    let reader = AffsReader::new(&device).unwrap();
+
+    let mut target_buf = [0u8; 512];
+    let len = reader.read_symlink(882, &mut target_buf).unwrap();
+
+    // Latin1 0xE9 should become UTF-8 0xC3 0xA9
+    assert_eq!(&target_buf[..len], &[b'c', b'a', b'f', 0xC3, 0xA9]);
+}
+
+#[test]
+fn test_symlink_not_a_symlink_error() {
+    let device = create_test_disk();
+    let reader = AffsReader::new(&device).unwrap();
+
+    // Try to read a regular file as symlink
+    let mut target_buf = [0u8; 512];
+    let result = reader.read_symlink(882, &mut target_buf);
+    assert!(matches!(result, Err(AffsError::NotASymlink)));
+}
+
+#[test]
+fn test_read_symlink_entry() {
+    let mut device = MockDevice::new(1760);
+    let (boot0, boot1) = create_boot_block();
+    device.set_block(0, &boot0);
+    device.set_block(1, &boot1);
+
+    let mut root = create_root_block(b"EntryLink");
+    let hash_idx = hash_name(b"link", false);
+    write_u32_be(&mut root, 24 + hash_idx * 4, 882);
+    set_checksum(&mut root, 20);
+    device.set_block(880, &root);
+
+    let symlink = create_softlink(b"link", b"target\0", 880);
+    device.set_block(882, &symlink);
+
+    let reader = AffsReader::new(&device).unwrap();
+    let entry = reader.find_entry(880, b"link").unwrap();
+
+    let mut target_buf = [0u8; 512];
+    let len = reader.read_symlink_entry(&entry, &mut target_buf).unwrap();
+    assert_eq!(&target_buf[..len], b"target");
+}
+
+#[test]
+fn test_volume_label_api() {
+    let device = create_test_disk();
+    let reader = AffsReader::new(&device).unwrap();
+
+    // label() is an alias for disk_name()
+    assert_eq!(reader.label(), b"TestDisk");
+    assert_eq!(reader.label_str(), Some("TestDisk"));
+    assert_eq!(reader.label(), reader.disk_name());
+}
+
+#[test]
+fn test_modification_time() {
+    let mut device = MockDevice::new(1760);
+    let (boot0, boot1) = create_boot_block();
+    device.set_block(0, &boot0);
+    device.set_block(1, &boot1);
+
+    // Create root block with specific dates
+    let mut root = [0u8; 512];
+    write_i32_be(&mut root, 0, 2); // T_HEADER
+    write_i32_be(&mut root, 12, 72); // hash table size
+    write_i32_be(&mut root, 0x138, -1); // bitmap valid
+
+    // Disk name
+    root[0x1B0] = 8;
+    root[0x1B1..0x1B9].copy_from_slice(b"TimeDisk");
+
+    // Creation date (days=0, mins=0, ticks=0 -> 1978-01-01 00:00:00)
+    write_i32_be(&mut root, 0x1A4, 0);
+    write_i32_be(&mut root, 0x1A8, 0);
+    write_i32_be(&mut root, 0x1AC, 0);
+
+    // Last modified date: 365 days, 60 mins (1 hour), 100 ticks (2 seconds)
+    // = 1979-01-01 01:00:02
+    write_i32_be(&mut root, 0x1D8, 365);
+    write_i32_be(&mut root, 0x1DC, 60);
+    write_i32_be(&mut root, 0x1E0, 100);
+
+    write_i32_be(&mut root, 508, 1); // ST_ROOT
+    set_checksum(&mut root, 20);
+    device.set_block(880, &root);
+
+    let reader = AffsReader::new(&device).unwrap();
+
+    // Check creation date
+    let creation = reader.creation_date();
+    assert_eq!(creation.days, 0);
+    assert_eq!(creation.mins, 0);
+    assert_eq!(creation.ticks, 0);
+    let dt = creation.to_date_time();
+    assert_eq!(dt.year, 1978);
+    assert_eq!(dt.month, 1);
+    assert_eq!(dt.day, 1);
+
+    // Check last modified date
+    let modified = reader.last_modified();
+    assert_eq!(modified.days, 365);
+    assert_eq!(modified.mins, 60);
+    assert_eq!(modified.ticks, 100);
+    let dt = modified.to_date_time();
+    assert_eq!(dt.year, 1979);
+    assert_eq!(dt.month, 1);
+    assert_eq!(dt.day, 1);
+    assert_eq!(dt.hour, 1);
+    assert_eq!(dt.minute, 0);
+    assert_eq!(dt.second, 2);
+
+    // Check Unix timestamp (mtime)
+    // mtime = days * 86400 + mins * 60 + ticks / 50 + epoch_offset
+    // epoch_offset = 2922 * 86400 = 252460800
+    // mtime = 365 * 86400 + 60 * 60 + 100 / 50 + 252460800
+    //       = 31536000 + 3600 + 2 + 252460800 = 284000402
+    let mtime = reader.mtime();
+    let expected = 365i64 * 86400 + 60 * 60 + 100 / 50 + 2922 * 86400;
+    assert_eq!(mtime, expected);
+}
+
+#[test]
+fn test_amiga_date_to_unix_timestamp() {
+    // Test the AmigaDate::to_unix_timestamp method directly
+    let date = AmigaDate::new(0, 0, 0); // 1978-01-01 00:00:00
+    let ts = date.to_unix_timestamp();
+
+    // Should be 8 years after Unix epoch
+    // 1970 + 8 = 1978
+    // Leap years: 1972, 1976 (2 leap days)
+    // Days: 8 * 365 + 2 = 2922
+    // Seconds: 2922 * 86400 = 252460800
+    assert_eq!(ts, 252460800);
+
+    // Test with some days and minutes
+    let date2 = AmigaDate::new(1, 60, 50); // 1 day, 1 hour, 1 second later
+    let ts2 = date2.to_unix_timestamp();
+    // 1 * 86400 + 60 * 60 + 50 / 50 + 252460800 = 86400 + 3600 + 1 + 252460800 = 252550801
+    assert_eq!(ts2, 252550801);
+}
+
+#[test]
+fn test_dir_entry_is_symlink() {
+    let mut device = MockDevice::new(1760);
+    let (boot0, boot1) = create_boot_block();
+    device.set_block(0, &boot0);
+    device.set_block(1, &boot1);
+
+    let mut root = create_root_block(b"SymDisk");
+    let hash_idx = hash_name(b"sym", false);
+    write_u32_be(&mut root, 24 + hash_idx * 4, 882);
+    set_checksum(&mut root, 20);
+    device.set_block(880, &root);
+
+    let symlink = create_softlink(b"sym", b"target\0", 880);
+    device.set_block(882, &symlink);
+
+    let reader = AffsReader::new(&device).unwrap();
+    let entry = reader.find_entry(880, b"sym").unwrap();
+
+    assert!(entry.is_symlink());
+    assert!(!entry.is_file());
+    assert!(!entry.is_dir());
+}
+
+#[test]
+fn test_symlink_functions() {
+    // Test the low-level symlink functions directly
+    use affs_read::{MAX_SYMLINK_LEN, max_utf8_len, read_symlink_target};
+
+    // MAX_SYMLINK_LEN should be 512 - 24 - 200 = 288
+    assert_eq!(MAX_SYMLINK_LEN, 288);
+
+    // max_utf8_len should double the input (worst case)
+    assert_eq!(max_utf8_len(100), 200);
+    assert_eq!(max_utf8_len(0), 0);
+
+    // Test read_symlink_target
+    let mut buf = [0u8; 512];
+    buf[24..30].copy_from_slice(b"hello\0");
+    let mut out = [0u8; 100];
+    let len = read_symlink_target(&buf, &mut out);
+    assert_eq!(len, 5);
+    assert_eq!(&out[..len], b"hello");
+}

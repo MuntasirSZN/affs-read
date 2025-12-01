@@ -57,14 +57,20 @@ mod dir;
 mod error;
 mod file;
 mod reader;
+mod symlink;
 mod types;
+mod varblock;
 
 pub use block::*;
-pub use checksum::{bitmap_sum, boot_sum, normal_sum, read_u16_be};
+pub use checksum::{bitmap_sum, boot_sum, normal_sum, normal_sum_slice, read_u16_be};
 pub use constants::*;
 pub use date::AmigaDate;
 pub use dir::{DirEntry, DirIter};
 pub use error::AffsError;
 pub use file::FileReader;
 pub use reader::AffsReader;
+pub use symlink::{
+    MAX_SYMLINK_LEN, max_utf8_len, read_symlink_target, read_symlink_target_with_block_size,
+};
 pub use types::*;
+pub use varblock::{AffsReaderVar, MAX_BLOCK_SIZE, VarDirEntry, VarDirIter};

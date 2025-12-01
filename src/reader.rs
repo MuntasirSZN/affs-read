@@ -5,7 +5,8 @@ use crate::constants::*;
 use crate::dir::{DirEntry, DirIter};
 use crate::error::{AffsError, Result};
 use crate::file::FileReader;
-use crate::types::{BlockDevice, FsFlags, FsType};
+use crate::symlink::read_symlink_target;
+use crate::types::{BlockDevice, EntryType, FsFlags, FsType};
 
 /// Main AFFS filesystem reader.
 ///
@@ -146,6 +147,41 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
         core::str::from_utf8(self.disk_name()).ok()
     }
 
+    /// Get the volume label (alias for disk_name).
+    ///
+    /// This matches GRUB's `grub_affs_label()` behavior.
+    #[inline]
+    pub fn label(&self) -> &[u8] {
+        self.disk_name()
+    }
+
+    /// Get the volume label as string (alias for disk_name_str).
+    #[inline]
+    pub fn label_str(&self) -> Option<&str> {
+        self.disk_name_str()
+    }
+
+    /// Get the volume creation date.
+    #[inline]
+    pub fn creation_date(&self) -> crate::date::AmigaDate {
+        self.root.creation_date
+    }
+
+    /// Get the volume last modification date.
+    #[inline]
+    pub fn last_modified(&self) -> crate::date::AmigaDate {
+        self.root.last_modified
+    }
+
+    /// Get the volume modification time as Unix timestamp.
+    ///
+    /// This matches GRUB's `grub_affs_mtime()` behavior:
+    /// - days * 86400 + min * 60 + hz / 50 + epoch offset
+    #[inline]
+    pub fn mtime(&self) -> i64 {
+        self.root.last_modified.to_unix_timestamp()
+    }
+
     /// Check if the bitmap is valid.
     #[inline]
     pub const fn bitmap_valid(&self) -> bool {
@@ -241,6 +277,45 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
             .read_block(block, &mut buf)
             .map_err(|()| AffsError::BlockReadError)?;
         EntryBlock::parse(&buf)
+    }
+
+    /// Read a symlink target.
+    ///
+    /// # Arguments
+    /// * `block` - Block number of the symlink entry
+    /// * `out` - Buffer to write the UTF-8 symlink target into
+    ///
+    /// # Returns
+    /// The number of bytes written to `out`.
+    ///
+    /// # Notes
+    /// - The symlink target is stored as Latin1 and converted to UTF-8
+    /// - Leading `:` (Amiga volume reference) is replaced with `/`
+    /// - The output buffer should be at least `MAX_SYMLINK_LEN * 2` bytes
+    ///   to handle worst-case Latin1 to UTF-8 expansion
+    pub fn read_symlink(&self, block: u32, out: &mut [u8]) -> Result<usize> {
+        let mut buf = [0u8; BLOCK_SIZE];
+        self.device
+            .read_block(block, &mut buf)
+            .map_err(|()| AffsError::BlockReadError)?;
+
+        // Verify this is a symlink
+        let entry = EntryBlock::parse(&buf)?;
+        if entry.entry_type() != Some(EntryType::SoftLink) {
+            return Err(AffsError::NotASymlink);
+        }
+
+        Ok(read_symlink_target(&buf, out))
+    }
+
+    /// Read a symlink target from a DirEntry.
+    ///
+    /// Convenience method that takes a DirEntry instead of a block number.
+    pub fn read_symlink_entry(&self, entry: &DirEntry, out: &mut [u8]) -> Result<usize> {
+        if !entry.is_symlink() {
+            return Err(AffsError::NotASymlink);
+        }
+        self.read_symlink(entry.block, out)
     }
 
     /// Get a DirEntry for the root directory.

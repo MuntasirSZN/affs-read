@@ -105,3 +105,24 @@ pub const OFS_DATA_SIZE: usize = 488;
 
 /// FFS data block payload size (full block).
 pub const FFS_DATA_SIZE: usize = 512;
+
+// Variable block size constants (GRUB parity)
+/// Maximum log2 block size (512 << 4 = 8192 bytes).
+pub const MAX_LOG_BLOCK_SIZE: u8 = 4;
+
+/// Maximum boot block location to probe (sector 0 and 1).
+pub const MAX_BOOT_BLOCK: u32 = 1;
+
+/// Symlink target offset in block (same as hash table offset).
+pub const SYMLINK_OFFSET: usize = 24;
+
+/// File header structure offset from end of block.
+pub const FILE_LOCATION: usize = 200;
+
+/// Amiga epoch: January 1, 1978 00:00:00 UTC.
+/// Offset from Unix epoch (January 1, 1970) in seconds.
+/// 8 years = 2922 days (including leap years 1972, 1976).
+pub const AMIGA_EPOCH_OFFSET: i64 = 252288000;
+
+/// Supported block sizes for probing.
+pub const BLOCK_SIZES: [usize; 5] = [512, 1024, 2048, 4096, 8192];

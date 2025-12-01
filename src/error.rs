@@ -33,6 +33,10 @@ pub enum AffsError {
     BufferTooSmall,
     /// Invalid data block sequence.
     InvalidDataSequence,
+    /// Not a symlink entry.
+    NotASymlink,
+    /// Symlink target too long.
+    SymlinkTooLong,
 }
 
 impl fmt::Display for AffsError {
@@ -52,6 +56,8 @@ impl fmt::Display for AffsError {
             Self::NotADirectory => write!(f, "not a directory"),
             Self::BufferTooSmall => write!(f, "buffer too small"),
             Self::InvalidDataSequence => write!(f, "invalid data block sequence"),
+            Self::NotASymlink => write!(f, "not a symlink"),
+            Self::SymlinkTooLong => write!(f, "symlink target too long"),
         }
     }
 }

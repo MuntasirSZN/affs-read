@@ -16,6 +16,31 @@ pub trait BlockDevice {
     fn read_block(&self, block: u32, buf: &mut [u8; 512]) -> Result<(), ()>;
 }
 
+/// Sector device trait for reading 512-byte sectors.
+///
+/// This is used for variable block size support, where the filesystem
+/// block size may be larger than 512 bytes. The reader will read
+/// multiple sectors to assemble a full block.
+pub trait SectorDevice {
+    /// Read a single 512-byte sector.
+    ///
+    /// # Arguments
+    /// * `sector` - Sector number to read
+    /// * `buf` - Buffer to read into (must be exactly 512 bytes)
+    ///
+    /// # Returns
+    /// `Ok(())` on success, `Err(())` on failure.
+    #[allow(clippy::result_unit_err)]
+    fn read_sector(&self, sector: u64, buf: &mut [u8; 512]) -> Result<(), ()>;
+}
+
+/// Blanket implementation: any BlockDevice is also a SectorDevice.
+impl<T: BlockDevice> SectorDevice for T {
+    fn read_sector(&self, sector: u64, buf: &mut [u8; 512]) -> Result<(), ()> {
+        self.read_block(sector as u32, buf)
+    }
+}
+
 /// Filesystem type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FsType {

@@ -38,6 +38,28 @@ impl AmigaDate {
             second,
         }
     }
+
+    /// Convert to Unix timestamp (seconds since 1970-01-01 00:00:00 UTC).
+    ///
+    /// This matches GRUB's `aftime2ctime()` behavior:
+    /// `days * 86400 + min * 60 + hz / 50 + epoch_offset`
+    ///
+    /// The Amiga epoch is January 1, 1978, which is 8 years (2922 days)
+    /// after the Unix epoch.
+    #[inline]
+    pub const fn to_unix_timestamp(self) -> i64 {
+        const SECONDS_PER_DAY: i64 = 86400;
+        const SECONDS_PER_MINUTE: i64 = 60;
+        const TICKS_PER_SECOND: i64 = 50;
+        // 8 years from 1970 to 1978 (including leap years 1972, 1976)
+        // = 365 * 8 + 2 = 2922 days
+        const EPOCH_OFFSET: i64 = 2922 * SECONDS_PER_DAY;
+
+        (self.days as i64) * SECONDS_PER_DAY
+            + (self.mins as i64) * SECONDS_PER_MINUTE
+            + (self.ticks as i64) / TICKS_PER_SECOND
+            + EPOCH_OFFSET
+    }
 }
 
 /// Decoded date and time.
