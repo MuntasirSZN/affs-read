@@ -12,7 +12,23 @@ categories = ["no-std", "filesystem", "embedded", "parser-implementations"]
 default = ["std"]
 std = []
 alloc = []
+perf-simd = []
+perf-asm = []
 
 [dependencies]
+# SIMD optimizations (no_std compatible)
+wide = { version = "0.7", default-features = false, optional = true }
+# For safe memory operations
+bytemuck = { version = "1.14", default-features = false, optional = true }
 
 [dev-dependencies]
+# Benchmarking
+divan = "0.1"
+
+[[bench]]
+name = "checksums"
+harness = false
+
+[[bench]]
+name = "hashing"
+harness = false
