@@ -2,6 +2,9 @@
 
 use affs_read::{bitmap_sum, boot_sum, normal_sum_slice};
 
+#[global_allocator]
+static ALLOC: divan::AllocProfiler = divan::AllocProfiler::system();
+
 fn main() {
     divan::main();
 }

@@ -11,13 +11,11 @@ A `no_std` compatible Rust crate for reading Amiga Fast File System (AFFS) disk 
 
 - **`no_std` compatible** - Works in embedded and bare-metal environments
 - **Zero heap allocations** - Core functionality uses only stack memory
-- **Optimized for performance** - Byte-level operations, branchless algorithms, and careful memory access patterns
 - **OFS and FFS support** - Handles both Original File System and Fast File System
 - **INTL and DIRCACHE modes** - Full support for international character handling and directory caching
 - **Streaming file reading** - Memory-efficient sequential file access
 - **Directory traversal** - Iterate through directory contents with lazy loading
 - **Checksum validation** - Ensures data integrity on all block reads
-- **Extensively tested** - Fuzz-tested and benchmarked for correctness and performance
 
 ## Installation
 
@@ -34,8 +32,6 @@ affs-read = "0.1"
 |---------|---------|-------------|
 | `std` | Yes | Enables `std::error::Error` implementation |
 | `alloc` | No | Enables features requiring heap allocation |
-| `perf-asm` | No | Enables assembly-level optimizations (experimental) |
-| `perf-simd` | No | Reserved for future SIMD optimizations |
 
 For `no_std` environments:
 
@@ -166,23 +162,6 @@ match reader.find_path(b"nonexistent") {
     Err(e) => println!("Error: {}", e),
 }
 ```
-
-## Performance
-
-The crate is optimized for performance with:
-
-- **Byte-level operations** - Direct memory access for checksums and hashing
-- **Branchless algorithms** - Reduced branch mispredictions in hot paths
-- **Cache-friendly access** - Sequential memory access patterns
-- **Zero allocations** - No heap allocations in core functionality
-- **Comprehensive benchmarks** - See `PERFORMANCE.md` for detailed metrics
-
-Typical performance on modern hardware:
-- Checksum calculation: ~150-200ns per block
-- Name hashing: ~5-30ns depending on length
-- Name comparison: ~1.5-7ns with early exit optimization
-
-Run benchmarks with `cargo bench` to see performance on your system.
 
 ## Safety
 

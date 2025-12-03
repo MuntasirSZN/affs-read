@@ -457,15 +457,10 @@ impl OfsDataBlock {
 /// Compute hash value for a name.
 ///
 /// This implements the Amiga filename hashing algorithm.
-///
-/// # Performance
-/// Optimized to reduce branching and improve cache locality.
-/// The hash is computed in a single pass with minimal overhead.
 #[inline]
 pub fn hash_name(name: &[u8], intl: bool) -> usize {
     let mut hash = name.len() as u32;
 
-    // Branchless optimization: compute both paths and select
     for &c in name {
         let upper = if intl {
             intl_to_upper(c)
@@ -478,13 +473,9 @@ pub fn hash_name(name: &[u8], intl: bool) -> usize {
 }
 
 /// Convert ASCII character to uppercase using branchless operation.
-///
-/// # Performance
-/// Uses bitwise operations to avoid branches for ASCII lowercase letters.
-/// The constant 32 is the difference between 'a' and 'A' in ASCII.
 #[inline]
 const fn ascii_to_upper(c: u8) -> u8 {
-    const ASCII_CASE_DIFF: u8 = 32; // Difference between 'a' and 'A'
+    const ASCII_CASE_DIFF: u8 = 32;
     if c.is_ascii() {
         c & !(c.is_ascii_lowercase() as u8 * ASCII_CASE_DIFF)
     } else {
@@ -494,21 +485,16 @@ const fn ascii_to_upper(c: u8) -> u8 {
 
 /// Convert character to uppercase with international support.
 ///
-/// # Performance
-/// Uses constant-time operations for better predictability.
-///
-/// # International Character Support
 /// Handles Latin-1 characters (192-254) excluding multiplication sign (247).
 /// Range 224-254 covers lowercase accented letters (à-þ) that map to
 /// uppercase equivalents (À-Þ) by subtracting 32.
 #[inline]
 pub const fn intl_to_upper(c: u8) -> u8 {
-    const ASCII_CASE_DIFF: u8 = 32; // Same offset for Latin-1 lowercase letters
-    const LATIN1_LOWER_START: u8 = 224; // à (a with grave)
-    const LATIN1_LOWER_END: u8 = 254; // þ (thorn)
-    const MULTIPLICATION_SIGN: u8 = 247; // × (not a letter, excluded)
+    const ASCII_CASE_DIFF: u8 = 32;
+    const LATIN1_LOWER_START: u8 = 224;
+    const LATIN1_LOWER_END: u8 = 254;
+    const MULTIPLICATION_SIGN: u8 = 247;
 
-    // More efficient range check
     if (c >= b'a' && c <= b'z')
         || (c >= LATIN1_LOWER_START && c <= LATIN1_LOWER_END && c != MULTIPLICATION_SIGN)
     {
@@ -519,31 +505,23 @@ pub const fn intl_to_upper(c: u8) -> u8 {
 }
 
 /// Compare two names for equality (case-insensitive).
-///
-/// # Performance
-/// Early exit on length mismatch, optimized character comparison.
 #[inline]
 pub fn names_equal(a: &[u8], b: &[u8], intl: bool) -> bool {
-    // Early exit on length mismatch
     if a.len() != b.len() {
         return false;
     }
 
-    // Fast path for empty names
     if a.is_empty() {
         return true;
     }
 
-    // Optimized comparison loop
     if intl {
-        // International mode
         for (&ca, &cb) in a.iter().zip(b.iter()) {
             if intl_to_upper(ca) != intl_to_upper(cb) {
                 return false;
             }
         }
     } else {
-        // ASCII mode - more optimized
         for (&ca, &cb) in a.iter().zip(b.iter()) {
             if ascii_to_upper(ca) != ascii_to_upper(cb) {
                 return false;

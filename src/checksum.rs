@@ -14,10 +14,6 @@ pub fn normal_sum(buf: &[u8; BLOCK_SIZE], checksum_offset: usize) -> u32 {
 /// Calculate the normal checksum for a variable-size block.
 ///
 /// Used for root blocks, entry blocks, etc. with variable block sizes.
-///
-/// # Performance
-/// This implementation uses byte-level access and optimized iteration
-/// to minimize overhead while maintaining no_std compatibility.
 #[inline]
 pub fn normal_sum_slice(buf: &[u8], checksum_offset: usize) -> u32 {
     let len = buf.len();
@@ -36,10 +32,8 @@ pub fn normal_sum_slice(buf: &[u8], checksum_offset: usize) -> u32 {
     let mut sum: u32 = 0;
     let mut offset = 0;
 
-    // Process words, skipping checksum location
     for i in 0..num_words {
         if i != checksum_word {
-            // Use manual byte access for guaranteed no_std compatibility
             let word = u32::from_be_bytes([
                 buf[offset],
                 buf[offset + 1],
@@ -57,19 +51,13 @@ pub fn normal_sum_slice(buf: &[u8], checksum_offset: usize) -> u32 {
 /// Calculate the boot block checksum.
 ///
 /// Special checksum algorithm for the boot block.
-///
-/// # Performance
-/// This implementation minimizes branch mispredictions and uses
-/// byte-level operations for optimal no_std compatibility.
 #[inline]
 pub fn boot_sum(buf: &[u8; 1024]) -> u32 {
     let mut sum: u32 = 0;
     let mut offset = 0;
 
-    // Process all 256 words (1024 bytes / 4)
     for i in 0..256 {
         if i != 1 {
-            // Manual byte-to-u32 conversion for better performance
             let d = u32::from_be_bytes([
                 buf[offset],
                 buf[offset + 1],
@@ -77,7 +65,6 @@ pub fn boot_sum(buf: &[u8; 1024]) -> u32 {
                 buf[offset + 3],
             ]);
             let new_sum = sum.wrapping_add(d);
-            // Handle overflow (carry) - branchless where possible
             sum = new_sum.wrapping_add((new_sum < sum) as u32);
         }
         offset += 4;
@@ -86,15 +73,11 @@ pub fn boot_sum(buf: &[u8; 1024]) -> u32 {
 }
 
 /// Calculate bitmap block checksum.
-///
-/// # Performance
-/// Optimized for byte-level operations with minimal overhead.
 #[inline]
 pub fn bitmap_sum(buf: &[u8; BLOCK_SIZE]) -> u32 {
     let mut sum: u32 = 0;
-    let mut offset = 4; // Skip first word (index 0)
+    let mut offset = 4;
 
-    // Process words 1..128
     for _ in 1..128 {
         let word = u32::from_be_bytes([
             buf[offset],
