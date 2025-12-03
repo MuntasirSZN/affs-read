@@ -470,27 +470,49 @@ pub fn hash_name(name: &[u8], intl: bool) -> usize {
         let upper = if intl {
             intl_to_upper(c)
         } else {
-            // Optimized ASCII uppercase: branchless for common case
-            if c.is_ascii() {
-                c & !(c.is_ascii_lowercase() as u8 * 32)
-            } else {
-                c
-            }
+            ascii_to_upper(c)
         };
         hash = (hash.wrapping_mul(13).wrapping_add(upper as u32)) & 0x7FF;
     }
     (hash % HASH_TABLE_SIZE as u32) as usize
 }
 
+/// Convert ASCII character to uppercase using branchless operation.
+///
+/// # Performance
+/// Uses bitwise operations to avoid branches for ASCII lowercase letters.
+/// The constant 32 is the difference between 'a' and 'A' in ASCII.
+#[inline]
+const fn ascii_to_upper(c: u8) -> u8 {
+    const ASCII_CASE_DIFF: u8 = 32; // Difference between 'a' and 'A'
+    if c.is_ascii() {
+        c & !(c.is_ascii_lowercase() as u8 * ASCII_CASE_DIFF)
+    } else {
+        c
+    }
+}
+
 /// Convert character to uppercase with international support.
 ///
 /// # Performance
 /// Uses constant-time operations for better predictability.
+///
+/// # International Character Support
+/// Handles Latin-1 characters (192-254) excluding multiplication sign (247).
+/// Range 224-254 covers lowercase accented letters (à-þ) that map to
+/// uppercase equivalents (À-Þ) by subtracting 32.
 #[inline]
 pub const fn intl_to_upper(c: u8) -> u8 {
+    const ASCII_CASE_DIFF: u8 = 32; // Same offset for Latin-1 lowercase letters
+    const LATIN1_LOWER_START: u8 = 224; // à (a with grave)
+    const LATIN1_LOWER_END: u8 = 254; // þ (thorn)
+    const MULTIPLICATION_SIGN: u8 = 247; // × (not a letter, excluded)
+
     // More efficient range check
-    if (c >= b'a' && c <= b'z') || (c >= 224 && c <= 254 && c != 247) {
-        c.wrapping_sub(32)
+    if (c >= b'a' && c <= b'z')
+        || (c >= LATIN1_LOWER_START && c <= LATIN1_LOWER_END && c != MULTIPLICATION_SIGN)
+    {
+        c.wrapping_sub(ASCII_CASE_DIFF)
     } else {
         c
     }
@@ -523,18 +545,7 @@ pub fn names_equal(a: &[u8], b: &[u8], intl: bool) -> bool {
     } else {
         // ASCII mode - more optimized
         for (&ca, &cb) in a.iter().zip(b.iter()) {
-            // Branchless ASCII uppercase comparison
-            let ua = if ca.is_ascii() {
-                ca & !(ca.is_ascii_lowercase() as u8 * 32)
-            } else {
-                ca
-            };
-            let ub = if cb.is_ascii() {
-                cb & !(cb.is_ascii_lowercase() as u8 * 32)
-            } else {
-                cb
-            };
-            if ua != ub {
+            if ascii_to_upper(ca) != ascii_to_upper(cb) {
                 return false;
             }
         }

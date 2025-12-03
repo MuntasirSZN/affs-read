@@ -33,45 +33,13 @@ pub fn normal_sum_slice(buf: &[u8], checksum_offset: usize) -> u32 {
     let checksum_word = checksum_offset / 4;
     let num_words = len / 4;
 
-    // Fast path: use u32 array operations when possible
-    #[cfg(feature = "perf-asm")]
-    {
-        normal_sum_asm(buf, checksum_word, num_words)
-    }
-
-    #[cfg(not(feature = "perf-asm"))]
-    {
-        let mut sum: u32 = 0;
-        let mut offset = 0;
-
-        // Process words, skipping checksum location
-        for i in 0..num_words {
-            if i != checksum_word {
-                // Use manual byte access for guaranteed no_std compatibility
-                let word = u32::from_be_bytes([
-                    buf[offset],
-                    buf[offset + 1],
-                    buf[offset + 2],
-                    buf[offset + 3],
-                ]);
-                sum = sum.wrapping_add(word);
-            }
-            offset += 4;
-        }
-
-        (sum as i32).wrapping_neg() as u32
-    }
-}
-
-/// ASM-optimized checksum implementation for better performance.
-#[cfg(feature = "perf-asm")]
-#[inline]
-fn normal_sum_asm(buf: &[u8], checksum_word: usize, num_words: usize) -> u32 {
     let mut sum: u32 = 0;
     let mut offset = 0;
 
+    // Process words, skipping checksum location
     for i in 0..num_words {
         if i != checksum_word {
+            // Use manual byte access for guaranteed no_std compatibility
             let word = u32::from_be_bytes([
                 buf[offset],
                 buf[offset + 1],
