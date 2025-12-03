@@ -245,7 +245,6 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
         let mut current_block = self.root_block;
         let mut final_entry: Option<DirEntry> = None;
 
-        // Use memchr for faster path splitting
         let mut start = 0;
         while start < path.len() {
             let end = memchr::memchr(b'/', &path[start..])

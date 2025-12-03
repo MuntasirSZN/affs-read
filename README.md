@@ -32,7 +32,9 @@ affs-read = "0.1"
 |---------|---------|-------------|
 | `std` | Yes | Enables `std::error::Error` implementation |
 | `alloc` | No | Enables features requiring heap allocation |
-| `simd` | No | Enables SIMD-optimized checksum operations |
+| `simd` | No | Enables SIMD-optimized checksum operations, adds `wide` and `bytemuck` |
+| `wide` | No | Enables `wide` usage |
+| `bytemuck` | No | Enables `bytemuck` usage |
 
 For `no_std` environments:
 
@@ -40,17 +42,6 @@ For `no_std` environments:
 [dependencies]
 affs-read = { version = "0.1", default-features = false }
 ```
-
-### Performance Optimizations
-
-The crate uses several high-performance libraries for optimal operation:
-
-- **`memchr`**: Fast byte search operations for path splitting and null terminator detection
-- **`simdutf8`**: Accelerated UTF-8 validation for string conversions
-- **`wide`** (with `simd` feature): SIMD-optimized checksum calculations
-- **`bytemuck`** (with `simd` feature): Safe memory transmutation for aligned operations
-
-All optimization crates are `no_std` compatible.
 
 ## Quick Start
 

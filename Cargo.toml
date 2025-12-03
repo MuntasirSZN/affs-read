@@ -12,11 +12,13 @@ categories = ["no-std", "filesystem", "embedded", "parser-implementations"]
 default = ["std"]
 std = []
 alloc = []
-simd = ["dep:wide", "dep:bytemuck"]
+simd = ["wide", "bytemuck"]
+wide = ["dep:wide"]
+bytemuck = ["dep:bytemuck"]
 
 [dependencies]
-wide = { version = "0.7", default-features = false, optional = true }
-bytemuck = { version = "1.14", default-features = false, optional = true }
+wide = { version = "1.0.2", default-features = false, optional = true }
+bytemuck = { version = "1.24", default-features = false, optional = true }
 memchr = { version = "2.7", default-features = false }
 simdutf8 = { version = "0.1", default-features = false }
 

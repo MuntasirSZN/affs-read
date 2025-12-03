@@ -9,20 +9,11 @@
 //!
 //! - `no_std` compatible by default
 //! - Zero heap allocations in core functionality
-//! - Optimized for performance with byte-level operations and branchless algorithms
 //! - Support for OFS and FFS filesystems
 //! - Support for INTL and DIRCACHE modes
 //! - Streaming file reading
 //! - Directory traversal
 //! - Extensively fuzz-tested for safety and correctness
-//!
-//! ## Performance
-//!
-//! The crate is optimized for performance while maintaining safety:
-//! - Checksum calculations: ~150-200ns per block
-//! - Name hashing: ~5-30ns depending on length
-//! - No unsafe code in critical paths
-//! - Cache-friendly sequential memory access
 //!
 //! See `PERFORMANCE.md` for detailed benchmarks and optimization documentation.
 //!

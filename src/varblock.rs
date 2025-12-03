@@ -36,9 +36,6 @@ pub struct AffsReaderVar<'a, D: SectorDevice> {
     block_size: usize,
     /// Hash table size (entries per directory).
     hash_table_size: u32,
-    /// Boot block sector offset (0 or 1).
-    #[allow(dead_code)]
-    boot_sector: u32,
     /// Disk name from root block.
     disk_name: [u8; MAX_NAME_LEN],
     /// Disk name length.
@@ -57,7 +54,6 @@ struct ProbeResult {
     log_blocksize: u8,
     block_size: usize,
     hash_table_size: u32,
-    boot_sector: u32,
     disk_name: [u8; MAX_NAME_LEN],
     disk_name_len: u8,
     creation_date: AmigaDate,
@@ -85,7 +81,6 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
             log_blocksize: result.log_blocksize,
             block_size: result.block_size,
             hash_table_size: result.hash_table_size,
-            boot_sector: result.boot_sector,
             disk_name: result.disk_name,
             disk_name_len: result.disk_name_len,
             creation_date: result.creation_date,
@@ -198,7 +193,6 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
                     log_blocksize,
                     block_size,
                     hash_table_size,
-                    boot_sector,
                     disk_name,
                     disk_name_len: name_len,
                     creation_date,
@@ -365,7 +359,6 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
             self.device,
             hash_table,
             ht_size,
-            self.is_intl(),
             self.log_blocksize,
             self.block_size,
         ))
@@ -403,7 +396,6 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
             self.device,
             hash_table,
             ht_size,
-            self.is_intl(),
             self.log_blocksize,
             self.block_size,
         ))
@@ -468,8 +460,6 @@ pub struct VarDirIter<'a, D: SectorDevice> {
     hash_table_size: usize,
     hash_index: usize,
     current_chain: u32,
-    #[allow(dead_code)]
-    intl: bool,
     log_blocksize: u8,
     block_size: usize,
     buf: [u8; MAX_BLOCK_SIZE],
@@ -480,7 +470,6 @@ impl<'a, D: SectorDevice> VarDirIter<'a, D> {
         device: &'a D,
         hash_table: [u32; 256],
         hash_table_size: usize,
-        intl: bool,
         log_blocksize: u8,
         block_size: usize,
     ) -> Self {
@@ -490,7 +479,6 @@ impl<'a, D: SectorDevice> VarDirIter<'a, D> {
             hash_table_size,
             hash_index: 0,
             current_chain: 0,
-            intl,
             log_blocksize,
             block_size,
             buf: [0u8; MAX_BLOCK_SIZE],

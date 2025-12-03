@@ -50,7 +50,6 @@ pub fn read_symlink_target_with_block_size(buf: &[u8], block_size: usize, out: &
     let symlink_end = symlink_end.min(buf.len());
     let latin1 = &buf[symlink_start..symlink_end];
 
-    // Find null terminator using memchr for faster search
     let len = memchr::memchr(0, latin1).unwrap_or(latin1.len());
     let latin1 = &latin1[..len];
 
