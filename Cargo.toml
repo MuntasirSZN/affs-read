@@ -1,6 +1,6 @@
 [package]
 name = "affs-read"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 description = "A no_std compatible crate for reading Amiga Fast File System (AFFS) disk images"
 documentation = "https://github.com/MuntasirSZN/affs-read"
