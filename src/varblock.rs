@@ -276,7 +276,7 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
     /// Get the disk name (volume label) as a string (if valid UTF-8).
     #[inline]
     pub fn disk_name_str(&self) -> Option<&str> {
-        core::str::from_utf8(self.disk_name()).ok()
+        crate::utf8::from_utf8(self.disk_name())
     }
 
     /// Get the volume label (alias for disk_name).
@@ -439,7 +439,7 @@ impl VarDirEntry {
     /// Get entry name as string.
     #[inline]
     pub fn name_str(&self) -> Option<&str> {
-        core::str::from_utf8(self.name()).ok()
+        crate::utf8::from_utf8(self.name())
     }
 
     /// Check if this is a directory.

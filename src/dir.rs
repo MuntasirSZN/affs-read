@@ -70,7 +70,7 @@ impl DirEntry {
     /// Get entry name as str (if valid UTF-8).
     #[inline]
     pub fn name_str(&self) -> Option<&str> {
-        core::str::from_utf8(self.name()).ok()
+        crate::utf8::from_utf8(self.name())
     }
 
     /// Get comment as byte slice.
@@ -82,7 +82,7 @@ impl DirEntry {
     /// Get comment as str (if valid UTF-8).
     #[inline]
     pub fn comment_str(&self) -> Option<&str> {
-        core::str::from_utf8(self.comment()).ok()
+        crate::utf8::from_utf8(self.comment())
     }
 
     /// Check if this is a directory.

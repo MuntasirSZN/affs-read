@@ -71,6 +71,7 @@ mod file;
 mod reader;
 mod symlink;
 mod types;
+mod utf8;
 mod varblock;
 
 pub use block::*;

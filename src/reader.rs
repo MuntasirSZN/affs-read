@@ -144,7 +144,7 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
     /// Get the disk name as a string (if valid UTF-8).
     #[inline]
     pub fn disk_name_str(&self) -> Option<&str> {
-        core::str::from_utf8(self.disk_name()).ok()
+        crate::utf8::from_utf8(self.disk_name())
     }
 
     /// Get the volume label (alias for disk_name).
@@ -245,18 +245,25 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
         let mut current_block = self.root_block;
         let mut final_entry: Option<DirEntry> = None;
 
-        for component in path.split(|&b| b == b'/') {
-            if component.is_empty() {
-                continue;
+        // Use memchr for faster path splitting
+        let mut start = 0;
+        while start < path.len() {
+            let end = memchr::memchr(b'/', &path[start..])
+                .map(|pos| start + pos)
+                .unwrap_or(path.len());
+
+            let component = &path[start..end];
+            if !component.is_empty() {
+                let entry = self.find_entry(current_block, component)?;
+
+                if entry.is_dir() {
+                    current_block = entry.block;
+                }
+
+                final_entry = Some(entry);
             }
 
-            let entry = self.find_entry(current_block, component)?;
-
-            if entry.is_dir() {
-                current_block = entry.block;
-            }
-
-            final_entry = Some(entry);
+            start = end + 1;
         }
 
         final_entry.ok_or(AffsError::EntryNotFound)
