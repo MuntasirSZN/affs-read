@@ -13,6 +13,9 @@
 //! - Support for INTL and DIRCACHE modes
 //! - Streaming file reading
 //! - Directory traversal
+//! - Extensively fuzz-tested for safety and correctness
+//!
+//! See `PERFORMANCE.md` for detailed benchmarks and optimization documentation.
 //!
 //! ## Example
 //!
@@ -59,6 +62,7 @@ mod file;
 mod reader;
 mod symlink;
 mod types;
+mod utf8;
 mod varblock;
 
 pub use block::*;

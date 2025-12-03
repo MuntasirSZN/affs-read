@@ -32,6 +32,9 @@ affs-read = "0.1"
 |---------|---------|-------------|
 | `std` | Yes | Enables `std::error::Error` implementation |
 | `alloc` | No | Enables features requiring heap allocation |
+| `simd` | No | Enables SIMD-optimized checksum operations, adds `wide` and `bytemuck` |
+| `wide` | No | Enables `wide` usage |
+| `bytemuck` | No | Enables `bytemuck` usage |
 
 For `no_std` environments:
 

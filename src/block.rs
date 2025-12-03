@@ -460,22 +460,45 @@ impl OfsDataBlock {
 #[inline]
 pub fn hash_name(name: &[u8], intl: bool) -> usize {
     let mut hash = name.len() as u32;
+
     for &c in name {
         let upper = if intl {
             intl_to_upper(c)
         } else {
-            c.to_ascii_uppercase()
+            ascii_to_upper(c)
         };
         hash = (hash.wrapping_mul(13).wrapping_add(upper as u32)) & 0x7FF;
     }
     (hash % HASH_TABLE_SIZE as u32) as usize
 }
 
-/// Convert character to uppercase with international support.
+/// Convert ASCII character to uppercase using branchless operation.
 #[inline]
-const fn intl_to_upper(c: u8) -> u8 {
-    if (c >= b'a' && c <= b'z') || (c >= 224 && c <= 254 && c != 247) {
-        c - (b'a' - b'A')
+const fn ascii_to_upper(c: u8) -> u8 {
+    const ASCII_CASE_DIFF: u8 = 32;
+    if c.is_ascii() {
+        c & !(c.is_ascii_lowercase() as u8 * ASCII_CASE_DIFF)
+    } else {
+        c
+    }
+}
+
+/// Convert character to uppercase with international support.
+///
+/// Handles Latin-1 characters (192-254) excluding multiplication sign (247).
+/// Range 224-254 covers lowercase accented letters (à-þ) that map to
+/// uppercase equivalents (À-Þ) by subtracting 32.
+#[inline]
+pub const fn intl_to_upper(c: u8) -> u8 {
+    const ASCII_CASE_DIFF: u8 = 32;
+    const LATIN1_LOWER_START: u8 = 224;
+    const LATIN1_LOWER_END: u8 = 254;
+    const MULTIPLICATION_SIGN: u8 = 247;
+
+    if (c >= b'a' && c <= b'z')
+        || (c >= LATIN1_LOWER_START && c <= LATIN1_LOWER_END && c != MULTIPLICATION_SIGN)
+    {
+        c.wrapping_sub(ASCII_CASE_DIFF)
     } else {
         c
     }
@@ -487,19 +510,22 @@ pub fn names_equal(a: &[u8], b: &[u8], intl: bool) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    for (&ca, &cb) in a.iter().zip(b.iter()) {
-        let ua = if intl {
-            intl_to_upper(ca)
-        } else {
-            ca.to_ascii_uppercase()
-        };
-        let ub = if intl {
-            intl_to_upper(cb)
-        } else {
-            cb.to_ascii_uppercase()
-        };
-        if ua != ub {
-            return false;
+
+    if a.is_empty() {
+        return true;
+    }
+
+    if intl {
+        for (&ca, &cb) in a.iter().zip(b.iter()) {
+            if intl_to_upper(ca) != intl_to_upper(cb) {
+                return false;
+            }
+        }
+    } else {
+        for (&ca, &cb) in a.iter().zip(b.iter()) {
+            if ascii_to_upper(ca) != ascii_to_upper(cb) {
+                return false;
+            }
         }
     }
     true
