@@ -12,8 +12,10 @@ categories = ["no-std", "filesystem", "embedded", "parser-implementations"]
 default = ["std"]
 std = []
 alloc = []
+simd = ["dep:wide"]
 
 [dependencies]
+wide = { version = "0.7", default-features = false, optional = true }
 
 [dev-dependencies]
 divan = "0.1"
