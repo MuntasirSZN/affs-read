@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup rust toolchain
-        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
         with:
           channel: stable
           components: rustfmt
@@ -34,7 +34,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup rust toolchain
-        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
         with:
           channel: stable
           components: clippy
@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup rust toolchain
-        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
         with:
           channel: stable
           cache-target: test
@@ -80,7 +80,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup rust toolchain, cache, install nextest and cargo-llvm-cov
-        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
         with:
           channel: nightly
           components: llvm-tools
@@ -119,7 +119,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup rust toolchain
-        uses: moonrepo/setup-rust@ede6de059f8046a5e236c94046823e2af11ca670 # v1.2.2
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
         with:
           channel: nightly
           bins: cargo-fuzz
