@@ -986,29 +986,12 @@ fn test_boot_block_with_code() {
     block0[12] = 0x60; // Some code
     block0[13] = 0x00;
 
-    // Calculate boot checksum
+    // Calculate boot checksum using the library function
+    use affs_read::boot_sum;
     let mut full_boot = [0u8; 1024];
     full_boot[..512].copy_from_slice(&block0);
     full_boot[512..].copy_from_slice(&block1);
-
-    let mut sum: u32 = 0;
-    for i in 0..256 {
-        if i != 1 {
-            let d = u32::from_be_bytes([
-                full_boot[i * 4],
-                full_boot[i * 4 + 1],
-                full_boot[i * 4 + 2],
-                full_boot[i * 4 + 3],
-            ]);
-            let new_sum = sum.wrapping_add(d);
-            if new_sum < sum {
-                sum = new_sum.wrapping_add(1);
-            } else {
-                sum = new_sum;
-            }
-        }
-    }
-    let checksum = !sum;
+    let checksum = boot_sum(&full_boot);
     write_u32_be(&mut block0, 4, checksum);
 
     device.set_block(0, &block0);
