@@ -169,8 +169,7 @@ fn boot_sum_scalar(buf: &[u8; 1024]) -> u32 {
                 buf[offset + 2],
                 buf[offset + 3],
             ]);
-            let new_sum = sum.wrapping_add(d);
-            sum = new_sum.wrapping_add((new_sum < sum) as u32);
+            sum = sum.wrapping_add(d);
         }
         offset += 4;
     }
@@ -190,9 +189,7 @@ fn boot_sum_simd(buf: &[u8; 1024]) -> u32 {
 
         // Aligned path: use bytemuck-cast slice
         // Process first word (index 0)
-        let d = u32::from_be(words_slice[0]);
-        let new_sum = sum.wrapping_add(d);
-        sum = new_sum.wrapping_add((new_sum < sum) as u32);
+        sum = sum.wrapping_add(u32::from_be(words_slice[0]));
 
         // Process words 2-255 in batches of 4 using SIMD (skip word at index 1)
         for i in (2..256).step_by(4) {
@@ -213,10 +210,7 @@ fn boot_sum_simd(buf: &[u8; 1024]) -> u32 {
 
             let words_array = words.to_array();
             for &d in &words_array {
-                if d != 0 {
-                    let new_sum = sum.wrapping_add(d);
-                    sum = new_sum.wrapping_add((new_sum < sum) as u32);
-                }
+                sum = sum.wrapping_add(d);
             }
         }
 
