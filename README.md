@@ -23,7 +23,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-affs-read = "0.1"
+affs-read = "0.4"
 ```
 
 ### Feature Flags
@@ -37,7 +37,7 @@ For `no_std` environments:
 
 ```toml
 [dependencies]
-affs-read = { version = "0.1", default-features = false }
+affs-read = { version = "0.4", default-features = false }
 ```
 
 ## Quick Start

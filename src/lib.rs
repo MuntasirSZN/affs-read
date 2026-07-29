@@ -15,8 +15,6 @@
 //! - Directory traversal
 //! - Extensively fuzz-tested for safety and correctness
 //!
-//! See `PERFORMANCE.md` for detailed benchmarks and optimization documentation.
-//!
 //! ## Example
 //!
 //! ```ignore
