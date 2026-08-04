@@ -50,10 +50,16 @@ pub fn normal_sum_slice(buf: &[u8], checksum_offset: usize) -> u32 {
 
 /// Calculate the boot block checksum.
 ///
-/// Special checksum algorithm for the boot block.
+/// This is a one's-complement sum with end-around carry: every overflow feeds
+/// a `1` back into the running total, matching the `ADD.L`/`ADDX.L` pair the
+/// Amiga ROM uses. The word at index 1 (the stored checksum) is skipped.
+///
+/// Note this differs from [`normal_sum`], which is a plain wrapping sum with
+/// no carry feedback. The two algorithms are not interchangeable — dropping
+/// the carry here makes every bootable disk fail to validate.
 #[inline]
 pub fn boot_sum(buf: &[u8; 1024]) -> u32 {
-    let mut sum: u32 = 0;
+    let mut sum: u64 = 0;
     let mut offset = 0;
 
     for i in 0..256 {
@@ -64,11 +70,19 @@ pub fn boot_sum(buf: &[u8; 1024]) -> u32 {
                 buf[offset + 2],
                 buf[offset + 3],
             ]);
-            sum = sum.wrapping_add(d);
+            sum += d as u64;
         }
         offset += 4;
     }
-    !sum
+
+    // Fold carries back into the low 32 bits. Accumulating into a u64 and
+    // folding at the end is equivalent to adding each carry as it happens,
+    // but avoids a per-word branch.
+    while (sum >> 32) != 0 {
+        sum = (sum & 0xFFFF_FFFF) + (sum >> 32);
+    }
+
+    !(sum as u32)
 }
 
 /// Calculate bitmap block checksum.

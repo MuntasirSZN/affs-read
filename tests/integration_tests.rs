@@ -986,12 +986,18 @@ fn test_boot_block_with_code() {
     block0[12] = 0x60; // Some code
     block0[13] = 0x00;
 
-    // Calculate boot checksum using the library function
-    use affs_read::boot_sum;
+    // Large words so the checksum overflows: end-around carry and plain
+    // wrapping diverge, which a carry-less boot_sum must fail to verify.
+    for offset in [16, 20, 24, 28, 32] {
+        write_u32_be(&mut block0, offset, 0xFFFF_FFFF);
+    }
+
+    // Calculate boot checksum with an independent reference implementation,
+    // not boot_sum itself, so a regressed boot_sum fails this test.
     let mut full_boot = [0u8; 1024];
     full_boot[..512].copy_from_slice(&block0);
     full_boot[512..].copy_from_slice(&block1);
-    let checksum = boot_sum(&full_boot);
+    let checksum = boot_sum_reference(&full_boot);
     write_u32_be(&mut block0, 4, checksum);
 
     device.set_block(0, &block0);
@@ -1449,9 +1455,9 @@ fn test_boot_sum_overflow() {
     boot_buf[2] = b'S';
     boot_buf[3] = 1;
 
-    // Calculate the correct checksum using the boot_sum algorithm
-    use affs_read::boot_sum;
-    let checksum = boot_sum(&boot_buf);
+    // Calculate the checksum with an independent reference implementation,
+    // not boot_sum itself, so a regressed boot_sum fails this test.
+    let checksum = boot_sum_reference(&boot_buf);
     boot_buf[4] = (checksum >> 24) as u8;
     boot_buf[5] = (checksum >> 16) as u8;
     boot_buf[6] = (checksum >> 8) as u8;
@@ -1460,6 +1466,123 @@ fn test_boot_sum_overflow() {
     // Verify the boot block can be parsed (checksum should be valid)
     let result = BootBlock::parse(&boot_buf);
     assert!(result.is_ok());
+}
+
+/// Independent reference implementation of the Amiga boot block checksum:
+/// one's-complement sum with end-around carry (the 68000 `ADD.L`/`ADDX.L`
+/// pair), mirroring ADFlib's `adfBootSum`. Kept deliberately separate from
+/// the library's `boot_sum` so fixtures built with it cross-check the
+/// implementation under test — the pre-existing tests used `boot_sum` itself
+/// and so passed under any algorithm, which is how a carry-less regression
+/// went unnoticed.
+fn boot_sum_reference(buf: &[u8; 1024]) -> u32 {
+    let mut sum: u32 = 0;
+    for i in 0..256 {
+        if i != 1 {
+            let d = u32::from_be_bytes(buf[i * 4..i * 4 + 4].try_into().unwrap());
+            if 0xFFFF_FFFF - sum < d {
+                sum = sum.wrapping_add(1); // end-around carry
+            }
+            sum = sum.wrapping_add(d);
+        }
+    }
+    !sum
+}
+
+/// Build a boot block whose words are `f(i)`, skipping the checksum word at
+/// index 1. Returns the raw 1024-byte buffer with no checksum written.
+fn boot_block_from(f: impl Fn(usize) -> u32) -> [u8; 1024] {
+    let mut buf = [0u8; 1024];
+    for i in 0..256 {
+        if i != 1 {
+            write_u32_be(&mut buf, i * 4, f(i));
+        }
+    }
+    buf
+}
+
+/// The Amiga boot checksum is a one's-complement sum with end-around carry:
+/// each overflow feeds a 1 back into the total. It is NOT the plain wrapping
+/// sum used by `normal_sum`.
+///
+/// Every expected value below was derived from an independent implementation
+/// of the algorithm, not from `boot_sum` itself — the pre-existing tests in
+/// this file compute their expectation with `boot_sum` and so pass under any
+/// algorithm, which is how a carry-less regression went unnoticed.
+///
+/// Cross-checked against a real bootable disk: a GenX (Revision 2026) boot
+/// block stores checksum 0x29A77792, which the end-around-carry sum
+/// reproduces exactly and the plain wrapping sum computes as 0x29A77800.
+#[test]
+fn test_boot_sum_uses_end_around_carry() {
+    use affs_read::boot_sum;
+
+    // Descending words, carrying on almost every addition.
+    let buf = boot_block_from(|i| 0xFFFF_FFFFu32.wrapping_sub(i as u32));
+    assert_eq!(boot_sum(&buf), 0x0000_7F7F, "end-around carry sum");
+    assert_ne!(boot_sum(&buf), 0x0000_807D, "plain wrapping sum (the bug)");
+
+    // 255 words of all-ones sum to 0xFFFFFFFF under one's-complement
+    // addition, so the complement is exactly zero.
+    let buf = boot_block_from(|_| 0xFFFF_FFFF);
+    assert_eq!(boot_sum(&buf), 0x0000_0000, "end-around carry sum");
+    assert_ne!(boot_sum(&buf), 0x0000_00FE, "plain wrapping sum (the bug)");
+}
+
+/// End-to-end guard: a boot block carrying a checksum computed off-line must
+/// validate. This is the path that broke — `BootBlock::parse` verifies the
+/// checksum whenever boot code is present (`buf[12] != 0`), so a carry-less
+/// `boot_sum` rejects every bootable disk in existence.
+#[test]
+fn test_bootable_block_with_external_checksum_parses() {
+    let mut buf = boot_block_from(|i| match i {
+        0 => 0x444F_5300, // "DOS\0"
+        _ => (i as u32).wrapping_mul(0x0123_4567),
+    });
+
+    // Word 3 is non-zero, so buf[12] != 0 and the checksum is verified.
+    assert_ne!(buf[12], 0, "test vector must exercise checksum validation");
+
+    write_u32_be(&mut buf, 4, 0xABC3_2573);
+    let parsed = BootBlock::parse(&buf);
+    assert!(
+        parsed.is_ok(),
+        "externally-checksummed boot block must validate, got {:?}",
+        parsed.err()
+    );
+
+    // The value a carry-less sum would have produced must be rejected.
+    write_u32_be(&mut buf, 4, 0xABC3_25E6);
+    assert!(matches!(
+        BootBlock::parse(&buf),
+        Err(AffsError::ChecksumMismatch)
+    ));
+}
+
+/// The boot and normal checksums are different algorithms over the same data;
+/// conflating them is what introduced the regression.
+#[test]
+fn test_boot_sum_differs_from_plain_wrapping_sum() {
+    use affs_read::boot_sum;
+
+    let buf = boot_block_from(|i| 0xFFFF_FF00u32.wrapping_add(i as u32));
+
+    let plain = {
+        let mut sum: u32 = 0;
+        for i in 0..256 {
+            if i != 1 {
+                let w = u32::from_be_bytes(buf[i * 4..i * 4 + 4].try_into().unwrap());
+                sum = sum.wrapping_add(w);
+            }
+        }
+        !sum
+    };
+
+    assert_ne!(
+        boot_sum(&buf),
+        plain,
+        "boot_sum must not degrade into a plain wrapping sum"
+    );
 }
 
 #[test]
