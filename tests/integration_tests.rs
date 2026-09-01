@@ -1744,7 +1744,7 @@ fn create_softlink(name: &[u8], target: &[u8], parent: u32) -> [u8; 512] {
     // Block type = T_HEADER (2)
     write_i32_be(&mut buf, 0, 2);
 
-    // Symlink target at offset 24 (GRUB_AFFS_SYMLINK_OFFSET)
+    // Symlink target at offset 24
     let target_len = target.len().min(288); // Max symlink length for 512 block
     buf[24..24 + target_len].copy_from_slice(&target[..target_len]);
 

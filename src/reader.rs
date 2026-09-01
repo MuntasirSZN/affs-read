@@ -148,8 +148,6 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
     }
 
     /// Get the volume label (alias for disk_name).
-    ///
-    /// This matches GRUB's `grub_affs_label()` behavior.
     #[inline]
     pub fn label(&self) -> &[u8] {
         self.disk_name()
@@ -175,8 +173,7 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
 
     /// Get the volume modification time as Unix timestamp.
     ///
-    /// This matches GRUB's `grub_affs_mtime()` behavior:
-    /// - days * 86400 + min * 60 + hz / 50 + epoch offset
+    /// Matches Linux kernel AFFS mtime handling.
     #[inline]
     pub fn mtime(&self) -> i64 {
         self.root.last_modified.to_unix_timestamp()

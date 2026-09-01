@@ -12,7 +12,7 @@ pub const MAX_SYMLINK_LEN: usize = BLOCK_SIZE - SYMLINK_OFFSET - FILE_LOCATION;
 /// Read symlink target from a block buffer.
 ///
 /// The symlink target is stored as a Latin1 string starting at offset 24
-/// (GRUB_AFFS_SYMLINK_OFFSET) in the entry block.
+/// in the entry block.
 ///
 /// # Arguments
 /// * `buf` - The entry block data (512 bytes for standard block size)
@@ -72,8 +72,8 @@ pub fn read_symlink_target_with_block_size(
 
 /// Convert Latin1 bytes to UTF-8, replacing leading `:` with `/`.
 ///
-/// In Amiga paths, `:` refers to the volume root. GRUB replaces this
-/// with `/` for Unix compatibility.
+/// In Amiga paths, `:` refers to the volume root and is replaced with
+/// `/` for Unix compatibility.
 ///
 /// # Arguments
 /// * `latin1` - Input Latin1 bytes

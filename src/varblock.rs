@@ -116,7 +116,7 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
                 continue;
             }
 
-            // Check FFS flag (we only support FFS like GRUB)
+            // Check FFS flag (we only support FFS for variable block size)
             let flags = buf[3];
             if (flags & DOSFS_FFS) == 0 {
                 continue; // OFS not supported for variable block size
@@ -317,8 +317,7 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
 
     /// Get the volume modification time as Unix timestamp.
     ///
-    /// This matches GRUB's `grub_affs_mtime()` behavior:
-    /// - days * 86400 + min * 60 + hz / 50 + epoch offset
+    /// Matches Linux kernel AFFS mtime handling.
     #[inline]
     pub fn mtime(&self) -> i64 {
         self.last_modified.to_unix_timestamp()

@@ -106,7 +106,7 @@ pub const OFS_DATA_SIZE: usize = 488;
 /// FFS data block payload size (full block).
 pub const FFS_DATA_SIZE: usize = 512;
 
-// Variable block size constants (GRUB parity)
+// Variable block size constants
 /// Maximum log2 block size (512 << 4 = 8192 bytes).
 pub const MAX_LOG_BLOCK_SIZE: u8 = 4;
 

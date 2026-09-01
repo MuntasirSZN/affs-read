@@ -41,8 +41,8 @@ impl AmigaDate {
 
     /// Convert to Unix timestamp (seconds since 1970-01-01 00:00:00 UTC).
     ///
-    /// This matches GRUB's `aftime2ctime()` behavior:
-    /// `days * 86400 + min * 60 + hz / 50 + epoch_offset`
+    /// Matches Linux kernel AFFS behavior (`AFFS_EPOCH_DELTA`):
+    /// `days * 86400 + min * 60 + ticks / 50 + epoch_offset`
     ///
     /// The Amiga epoch is January 1, 1978, which is 8 years (2922 days)
     /// after the Unix epoch.
