@@ -72,12 +72,18 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
     pub fn new(device: &'a D, total_sectors: u64) -> Result<Self> {
         let result = Self::probe(device, total_sectors)?;
 
+        let total_blocks_u64 = total_sectors >> result.log_blocksize;
+        let total_blocks = u32::try_from(total_blocks_u64).map_err(|_| AffsError::InvalidState)?;
+        if result.root_block >= total_blocks {
+            return Err(AffsError::BlockOutOfRange);
+        }
+
         Ok(Self {
             device,
             fs_type: result.fs_type,
             fs_flags: result.fs_flags,
             root_block: result.root_block,
-            total_blocks: (total_sectors >> result.log_blocksize) as u32,
+            total_blocks,
             log_blocksize: result.log_blocksize,
             block_size: result.block_size,
             hash_table_size: result.hash_table_size,
@@ -89,7 +95,7 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
     }
 
     /// Probe the filesystem to determine block size.
-    fn probe(device: &'a D, _total_sectors: u64) -> Result<ProbeResult> {
+    fn probe(device: &'a D, total_sectors: u64) -> Result<ProbeResult> {
         // Buffer for reading - we need max block size
         let mut buf = [0u8; MAX_BLOCK_SIZE];
 
@@ -130,6 +136,13 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
             // Try each block size
             for log_blocksize in 0..=MAX_LOG_BLOCK_SIZE {
                 let block_size = 512usize << log_blocksize;
+                // Early reject if root block would be beyond device size.
+                if total_sectors != 0 {
+                    let total_blocks = total_sectors >> log_blocksize;
+                    if (root_block_num as u64) >= total_blocks {
+                        continue;
+                    }
+                }
 
                 // Read root block
                 let root_sector = (root_block_num as u64) << log_blocksize;
@@ -149,11 +162,12 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
                     continue;
                 }
 
-                // Validate hash table size
-                let hash_table_size = read_u32_be_slice(&buf, 12);
-                if hash_table_size == 0 {
+                // Validate hash table size (signed; 0 and negative are invalid).
+                let hash_table_size_i32 = read_i32_be_slice(&buf, 12);
+                if hash_table_size_i32 <= 0 || hash_table_size_i32 > 256 {
                     continue;
                 }
+                let hash_table_size = hash_table_size_i32 as u32;
 
                 // Validate checksum
                 let checksum = read_u32_be_slice(&buf, 20);
@@ -315,7 +329,13 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
     /// Check if international mode is enabled.
     #[inline]
     pub const fn is_intl(&self) -> bool {
-        self.fs_flags.intl || self.fs_flags.dircache
+        self.fs_flags.intl
+    }
+
+    /// Check if directory cache mode is enabled.
+    #[inline]
+    pub const fn is_dircache(&self) -> bool {
+        self.fs_flags.dircache
     }
 
     /// Read a symlink target.
@@ -336,11 +356,7 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
             return Err(AffsError::NotASymlink);
         }
 
-        Ok(read_symlink_target_with_block_size(
-            &buf[..self.block_size],
-            self.block_size,
-            out,
-        ))
+        read_symlink_target_with_block_size(&buf[..self.block_size], self.block_size, out)
     }
 
     /// Iterate over entries in the root directory.
@@ -503,6 +519,19 @@ impl<'a, D: SectorDevice> VarDirIter<'a, D> {
     fn parse_entry(&self, block: u32) -> Option<VarDirEntry> {
         let buf = &self.buf[..self.block_size];
 
+        // Minimal structural validation: header type must be T_HEADER and
+        // checksum must validate. This mirrors EntryBlock::parse and prevents
+        // a forged directory entry from being accepted via the var path.
+        let block_type = read_i32_be_slice(buf, 0);
+        if block_type != T_HEADER {
+            return None;
+        }
+        let checksum = read_u32_be_slice(buf, 20);
+        let calculated = normal_sum_slice(buf, 20);
+        if checksum != calculated {
+            return None;
+        }
+
         // Entry type is at end of block - 4
         let sec_type = read_i32_be_slice(buf, self.block_size - 4);
         let entry_type = EntryType::from_sec_type(sec_type)?;
@@ -546,9 +575,14 @@ impl<D: SectorDevice> Iterator for VarDirIter<'_, D> {
     type Item = Result<VarDirEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let mut total_steps: usize = 0;
         loop {
+            if total_steps >= 10_000 {
+                return Some(Err(AffsError::InvalidState));
+            }
             // If we're in a hash chain, continue it
             if self.current_chain != 0 {
+                total_steps += 1;
                 if let Err(e) = self.read_block_into(self.current_chain) {
                     return Some(Err(e));
                 }
@@ -689,6 +723,9 @@ mod tests {
                     DummyGoodDevice::write_u32_be(&mut eb, size_offset, 123);
                     // Parent at block_size - 12
                     DummyGoodDevice::write_u32_be(&mut eb, 512 - 12, 2);
+                    // Checksum at 20
+                    let checksum = normal_sum_slice(&eb[..512], 20);
+                    DummyGoodDevice::write_u32_be(&mut eb, 20, checksum);
                     buf.copy_from_slice(&eb);
                     Ok(())
                 }

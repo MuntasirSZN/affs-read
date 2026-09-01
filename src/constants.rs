@@ -122,7 +122,8 @@ pub const FILE_LOCATION: usize = 200;
 /// Amiga epoch: January 1, 1978 00:00:00 UTC.
 /// Offset from Unix epoch (January 1, 1970) in seconds.
 /// 8 years = 2922 days (including leap years 1972, 1976).
-pub const AMIGA_EPOCH_OFFSET: i64 = 252288000;
+/// 2922 * 86400 = 252460800.
+pub const AMIGA_EPOCH_OFFSET: i64 = 252460800;
 
 /// Supported block sizes for probing.
 pub const BLOCK_SIZES: [usize; 5] = [512, 1024, 2048, 4096, 8192];

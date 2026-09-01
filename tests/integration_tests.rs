@@ -2021,7 +2021,7 @@ fn test_symlink_functions() {
     let mut buf = [0u8; 512];
     buf[24..30].copy_from_slice(b"hello\0");
     let mut out = [0u8; 100];
-    let len = read_symlink_target(&buf, &mut out);
+    let len = read_symlink_target(&buf, &mut out).unwrap();
     assert_eq!(len, 5);
     assert_eq!(&out[..len], b"hello");
 }

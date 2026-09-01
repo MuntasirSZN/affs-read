@@ -81,7 +81,17 @@ pub struct DateTime {
 
 /// Convert days since 1978-01-01 to (year, month, day).
 fn days_to_date(mut days: i32) -> (u16, u8, u8) {
-    const DAYS_IN_MONTH: [i32; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    const DAYS_IN_MONTH: [i32; 12] = [31, 28, 31, 30, 31, 30, 31, 30, 31, 30, 31, 31];
+
+    // Clamp corrupt negative days (should not happen on valid disks) to epoch.
+    if days < 0 {
+        return (1978, 1, 1);
+    }
+    // Guard against crafted huge day count that would loop for minutes.
+    // Max Amiga date is around year 2150 (~63k days); clamp beyond.
+    if days > 200_000 {
+        days = 200_000;
+    }
 
     let mut year = 1978u16;
 
@@ -92,7 +102,11 @@ fn days_to_date(mut days: i32) -> (u16, u8, u8) {
             break;
         }
         days -= days_in_year;
-        year += 1;
+        year = year.wrapping_add(1);
+        // u16 overflow guard (should be unreachable due to clamp above).
+        if year == 0 {
+            return (u16::MAX, 12, 31);
+        }
     }
 
     // Find month

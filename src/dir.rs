@@ -138,7 +138,14 @@ impl<'a, D: BlockDevice> DirIter<'a, D> {
         let hash = hash_name(name, self.intl);
         let mut block = self.hash_table[hash];
 
+        // Guard against crafted circular hash chains.
+        let mut steps: usize = 0;
         while block != 0 {
+            if steps >= 10_000 {
+                return Err(AffsError::InvalidState);
+            }
+            steps += 1;
+
             self.device
                 .read_block(block, &mut self.buf)
                 .map_err(|()| AffsError::BlockReadError)?;
@@ -160,9 +167,17 @@ impl<D: BlockDevice> Iterator for DirIter<'_, D> {
     type Item = Result<DirEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // Hard bound: each of 72 hash slots can chain, but a crafted circular
+        // chain must not DOS the caller. 10k entries is already far beyond any
+        // valid AFFS directory; after that we surface InvalidState.
+        let mut total_steps: usize = 0;
         loop {
+            if total_steps >= 10_000 {
+                return Some(Err(AffsError::InvalidState));
+            }
             // If we're in a hash chain, continue it
             if self.current_chain != 0 {
+                total_steps += 1;
                 let result = self.device.read_block(self.current_chain, &mut self.buf);
                 if result.is_err() {
                     return Some(Err(AffsError::BlockReadError));

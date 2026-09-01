@@ -311,7 +311,7 @@ impl<'a, D: BlockDevice> AffsReader<'a, D> {
             return Err(AffsError::NotASymlink);
         }
 
-        Ok(read_symlink_target(&buf, out))
+        read_symlink_target(&buf, out)
     }
 
     /// Read a symlink target from a DirEntry.
