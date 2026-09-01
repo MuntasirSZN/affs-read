@@ -78,6 +78,9 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
         }
 
         let file_size = entry.byte_size;
+        if entry.high_seq < 0 || entry.high_seq as usize > MAX_DATABLK {
+            return Err(AffsError::InvalidState);
+        }
         let blocks_in_current = entry.high_seq as u32;
 
         // Copy data block pointers
@@ -125,6 +128,9 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
         }
 
         let file_size = entry.byte_size;
+        if entry.high_seq < 0 || entry.high_seq as usize > MAX_DATABLK {
+            return Err(AffsError::InvalidState);
+        }
         let blocks_in_current = entry.high_seq as u32;
 
         let mut data_blocks = [0u32; MAX_DATABLK];
@@ -281,7 +287,9 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
                 // OFS has explicit data size in header
                 // We need to parse it from current buffer
                 let header = OfsDataBlock::parse(&self.buf).ok();
-                header.map(|h| h.data_size as usize).unwrap_or(0)
+                header
+                    .map(|h| (h.data_size as usize).min(OFS_DATA_SIZE))
+                    .unwrap_or(0)
             }
             FsType::Ffs => {
                 // FFS uses full block, but last block may be partial
@@ -329,6 +337,11 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
             return Ok(self.current_data_block);
         }
 
+        // Guard against crafted circular linked list.
+        if self.block_index > 1_000_000 {
+            return Err(AffsError::InvalidState);
+        }
+
         // Follow the linked list
         // current buffer should have the previous data block
         let header = OfsDataBlock::parse(&self.buf)?;
@@ -344,12 +357,20 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
                 return Ok(0); // No more blocks
             }
 
+            // Guard against crafted circular extension chain.
+            if self.block_index > 1_000_000 {
+                return Err(AffsError::InvalidState);
+            }
+
             // Load extension block
             self.device
                 .read_block(self.next_extension, &mut self.buf)
                 .map_err(|()| AffsError::BlockReadError)?;
 
             let ext = FileExtBlock::parse(&self.buf)?;
+            if ext.high_seq < 0 || ext.high_seq as usize > MAX_DATABLK {
+                return Err(AffsError::InvalidState);
+            }
 
             // Copy data block pointers
             self.data_blocks.copy_from_slice(&ext.data_blocks);
