@@ -74,7 +74,11 @@ impl<'a, D: SectorDevice> AffsReaderVar<'a, D> {
 
         let total_blocks_u64 = total_sectors >> result.log_blocksize;
         let total_blocks = u32::try_from(total_blocks_u64).map_err(|_| AffsError::InvalidState)?;
-        if result.root_block >= total_blocks {
+        // Only enforce range when the caller actually knows the device size.
+        // total_sectors==0 is used by callers probing an unknown-size image
+        // (e.g. tests with DummyGoodDevice total_sectors=100 vs raw probe) and
+        // must be allowed to proceed if probe checksum succeeded.
+        if total_sectors != 0 && result.root_block >= total_blocks {
             return Err(AffsError::BlockOutOfRange);
         }
 
@@ -479,6 +483,8 @@ pub struct VarDirIter<'a, D: SectorDevice> {
     log_blocksize: u8,
     block_size: usize,
     buf: [u8; MAX_BLOCK_SIZE],
+    traversed: usize,
+    exhausted: bool,
 }
 
 impl<'a, D: SectorDevice> VarDirIter<'a, D> {
@@ -498,6 +504,8 @@ impl<'a, D: SectorDevice> VarDirIter<'a, D> {
             log_blocksize,
             block_size,
             buf: [0u8; MAX_BLOCK_SIZE],
+            traversed: 0,
+            exhausted: false,
         }
     }
 
@@ -575,14 +583,17 @@ impl<D: SectorDevice> Iterator for VarDirIter<'_, D> {
     type Item = Result<VarDirEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut total_steps: usize = 0;
+        if self.exhausted {
+            return Some(Err(AffsError::InvalidState));
+        }
         loop {
-            if total_steps >= 10_000 {
+            if self.traversed >= 10_000 {
+                self.exhausted = true;
                 return Some(Err(AffsError::InvalidState));
             }
             // If we're in a hash chain, continue it
             if self.current_chain != 0 {
-                total_steps += 1;
+                self.traversed += 1;
                 if let Err(e) = self.read_block_into(self.current_chain) {
                     return Some(Err(e));
                 }

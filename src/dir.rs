@@ -114,6 +114,8 @@ pub struct DirIter<'a, D: BlockDevice> {
     current_chain: u32,
     intl: bool,
     buf: [u8; BLOCK_SIZE],
+    traversed: usize,
+    exhausted: bool,
 }
 
 impl<'a, D: BlockDevice> DirIter<'a, D> {
@@ -126,6 +128,8 @@ impl<'a, D: BlockDevice> DirIter<'a, D> {
             current_chain: 0,
             intl,
             buf: [0u8; BLOCK_SIZE],
+            traversed: 0,
+            exhausted: false,
         }
     }
 
@@ -169,15 +173,20 @@ impl<D: BlockDevice> Iterator for DirIter<'_, D> {
     fn next(&mut self) -> Option<Self::Item> {
         // Hard bound: each of 72 hash slots can chain, but a crafted circular
         // chain must not DOS the caller. 10k entries is already far beyond any
-        // valid AFFS directory; after that we surface InvalidState.
-        let mut total_steps: usize = 0;
+        // valid AFFS directory; after that we surface InvalidState. The counter
+        // is persistent across calls so a circular chain cannot be retried
+        // indefinitely.
+        if self.exhausted {
+            return Some(Err(AffsError::InvalidState));
+        }
         loop {
-            if total_steps >= 10_000 {
+            if self.traversed >= 10_000 {
+                self.exhausted = true;
                 return Some(Err(AffsError::InvalidState));
             }
             // If we're in a hash chain, continue it
             if self.current_chain != 0 {
-                total_steps += 1;
+                self.traversed += 1;
                 let result = self.device.read_block(self.current_chain, &mut self.buf);
                 if result.is_err() {
                     return Some(Err(AffsError::BlockReadError));

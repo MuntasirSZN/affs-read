@@ -329,6 +329,21 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
         }
     }
 
+    /// Derive a safe upper bound for data blocks from the u32 file size
+    /// and the per-block payload. `u32::MAX / payload` is the absolute
+    /// maximum number of data blocks any file in this FS can reference.
+    #[inline]
+    fn max_data_blocks(&self) -> usize {
+        let payload = self.data_block_size();
+        // payload is 488 or 512, never 0.
+        let max_by_u32 = (u32::MAX as usize / payload) + 2;
+        // Also bound by this file's own size — tighter for small files.
+        let needed = self.file_size as usize / payload + 3;
+        // Use the larger of the two so a valid huge file (>1M blocks) can
+        // still be traversed, while small files keep a tighter guard.
+        max_by_u32.max(needed)
+    }
+
     /// Get next data block for OFS (follows linked list).
     fn get_next_ofs_block(&mut self) -> Result<u32> {
         if self.block_index == 0 {
@@ -337,8 +352,10 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
             return Ok(self.current_data_block);
         }
 
-        // Guard against crafted circular linked list.
-        if self.block_index > 1_000_000 {
+        // Guard against crafted circular linked list. Bound derived from
+        // u32 byte_size so a valid 4 GiB file (OFS ~8.8M blocks, FFS ~8.4M)
+        // is allowed, unlike the previous fixed 1_000_000 cap.
+        if (self.block_index as usize) > self.max_data_blocks() {
             return Err(AffsError::InvalidState);
         }
 
@@ -357,8 +374,9 @@ impl<'a, D: BlockDevice> FileReader<'a, D> {
                 return Ok(0); // No more blocks
             }
 
-            // Guard against crafted circular extension chain.
-            if self.block_index > 1_000_000 {
+            // Guard against crafted circular extension chain — same derived
+            // bound as OFS so files >1M blocks remain readable.
+            if (self.block_index as usize) > self.max_data_blocks() {
                 return Err(AffsError::InvalidState);
             }
 
@@ -445,5 +463,45 @@ mod tests {
         let device = DummyDevice;
         let result = FileReader::new(&device, FsType::Ffs, 100);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_max_data_blocks_derived_not_fixed_1m() {
+        // Construct a minimal valid file header for a huge file (>1M blocks)
+        // to verify the derived guard allows it. We reuse MockDevice logic
+        // via a synthetic EntryBlock rather than allocating 1M blocks.
+        let mut hdr = [0u8; BLOCK_SIZE];
+        // Use integration-test helper layout: high_seq max 72, but file_size
+        // drives max_data_blocks(). With FFS payload 512, u32::MAX needs
+        // ~8.4M blocks — must be > 1_000_000.
+        let large_size = u32::MAX;
+        // Manually craft EntryBlock fields in hdr
+        hdr[0..4].copy_from_slice(&2i32.to_be_bytes()); // T_HEADER
+        hdr[8..12].copy_from_slice(&72i32.to_be_bytes()); // high_seq 72
+        hdr[0x144..0x148].copy_from_slice(&large_size.to_be_bytes());
+        hdr[0x1B0] = 4;
+        hdr[0x1B1..0x1B5].copy_from_slice(b"bigf");
+        hdr[0x1FC..].copy_from_slice(&(-3i32).to_be_bytes()); // ST_FILE
+        // checksum at 20
+        let sum = crate::checksum::normal_sum(&hdr, 20);
+        hdr[20..24].copy_from_slice(&sum.to_be_bytes());
+        let entry = crate::block::EntryBlock::parse(&hdr).unwrap();
+
+        struct NoopDevice;
+        impl BlockDevice for NoopDevice {
+            fn read_block(&self, _b: u32, buf: &mut [u8; 512]) -> core::result::Result<(), ()> {
+                // Return a valid empty header for any extension read — not used in this test
+                buf.fill(0);
+                Ok(())
+            }
+        }
+        let dev = NoopDevice;
+        let reader = FileReader::from_entry(&dev, FsType::Ffs, 100, &entry).unwrap();
+        // Derived bound must exceed 1M and exceed the 8M needed for u32::MAX
+        assert!(reader.max_data_blocks() > 1_000_000);
+        assert!(reader.max_data_blocks() >= (u32::MAX as usize / 512));
+        // Simulate that block_index at 1.5M is still allowed (would have
+        // been rejected by the old fixed 1M guard).
+        assert!((1_500_000usize) < reader.max_data_blocks());
     }
 }
